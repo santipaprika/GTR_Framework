@@ -1,9 +1,9 @@
 #pragma once
 #include "prefab.h"
+#include "entity.h"
 
 //forward declarations
 class Camera;
-
 namespace GTR {
 
 	class Prefab;
@@ -18,6 +18,8 @@ namespace GTR {
 
 		//add here your functions
 		//...
+		//to render a scene
+		void renderScene(GTR::Scene* scene, Camera* camera);
 	
 		//to render a whole prefab (with all its nodes)
 		void renderPrefab(const Matrix44& model, GTR::Prefab* prefab, Camera* camera);

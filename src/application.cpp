@@ -6,23 +6,22 @@
 #include "fbo.h"
 #include "shader.h"
 #include "input.h"
+#include "extra/hdre.h"
 #include "includes.h"
 #include "prefab.h"
 #include "gltf_loader.h"
 #include "renderer.h"
+#include "entity.h"
 
 #include <cmath>
 #include <string>
 #include <cstdio>
 
 Application* Application::instance = nullptr;
-Vector4 bg_color(0.5, 0.5, 0.5, 1.0);
-
 Camera* camera = nullptr;
-GTR::Prefab* prefab_car = nullptr;
-GTR::Renderer* renderer = nullptr;
-FBO* fbo = nullptr;
 
+Vector4 bg_color(0.5, 0.5, 0.5, 1.0);
+GTR::Renderer* renderer;
 float cam_speed = 10;
 
 Application::Application(int window_width, int window_height, SDL_Window* window)
@@ -33,9 +32,13 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	instance = this;
 	must_exit = false;
 	render_debug = true;
+	render_grid = false;
 	render_gui = true;
 
 	render_wireframe = false;
+
+	//initialize scene
+	GTR::Scene* scene = new GTR::Scene();
 
 	fps = 0;
 	frame = 0;
@@ -44,10 +47,10 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	mouse_locked = false;
 
 	//loads and compiles several shaders from one single file
-    //change to "data/shader_atlas_osx.txt" if you are in XCODE
-	if(!Shader::LoadAtlas("data/shader_atlas.txt"))
-        exit(1);
-    checkGLErrors();
+	//change to "data/shader_atlas_osx.txt" if you are in XCODE
+	if (!Shader::LoadAtlas("data/shader_atlas.txt"))
+		exit(1);
+	checkGLErrors();
 
 	// Create camera
 	camera = new Camera();
@@ -57,8 +60,35 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	//This class will be the one in charge of rendering all 
 	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor
 
-	//Lets load some object to render
-	prefab_car = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
+	//Load lights (the constructor adds them automatically to the scene)
+	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(20, 65, 90));
+	GTR::Light* light2 = new GTR::Light(Color::YELLOW, Vector3(0, 30, 80), Vector3(7.4, 0, 0), GTR::SPOT);
+	GTR::Light* light3 = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0), Vector3(-9, 0, 0), GTR::DIRECTIONAL);
+
+	//Add lights into scene
+	scene->AddEntity(light1);
+	scene->AddEntity(light2);
+	scene->AddEntity(light3);
+
+	//Create plane
+	GTR::Node plane_node = GTR::Node();
+	plane_node.mesh = new Mesh();
+	plane_node.mesh->createPlane(2048.0);
+	plane_node.material = new GTR::Material(Texture::Get("data/textures/road.tga"));
+	plane_node.material->name = "Road";
+	plane_node.material->tiles_number = 4.4;
+
+	//Create prefabs
+	GTR::Prefab* plane_prefab = new GTR::Prefab();
+	plane_prefab->name = "Plane (road)";
+	plane_prefab->root = plane_node;
+
+	GTR::Prefab* car = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
+
+	//Add to prefabs list
+	scene->AddEntity(new GTR::PrefabEntity(plane_prefab));
+	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(0,0,0)));
+	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(200,0,60), Vector3(0,40,0)));
 
 	//hide the cursor
 	SDL_ShowCursor(!mouse_locked); //hide or show the mouse
@@ -71,7 +101,7 @@ void Application::render(void)
 	checkGLErrors();
 
 	//set the clear color (the background color)
-	glClearColor(bg_color.x, bg_color.y, bg_color.z, bg_color.w );
+	glClearColor(bg_color.x, bg_color.y, bg_color.z, bg_color.w);
 
 	// Clear the color and the depth buffer
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -88,9 +118,8 @@ void Application::render(void)
 	else
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-	//lets render something
-	Matrix44 model;
-	renderer->renderPrefab( model, prefab_car, camera );
+	//lets render prefabs
+	renderer->renderScene(GTR::Scene::instance, camera);
 
 	//Draw the floor grid, helpful to have a reference point
 	if(render_debug)
@@ -104,12 +133,14 @@ void Application::render(void)
 void Application::renderDebugGUI(void)
 {
 	#ifndef SKIP_IMGUI //to block this code from compiling if we want
-
+	
 	//System stats
 	ImGui::Text(getGPUStats().c_str());					   // Display some text (you can use a format strings too)
 
 	ImGui::Checkbox("Wireframe", &render_wireframe);
 	ImGui::ColorEdit4("BG color", bg_color.v);
+
+	GTR::Scene* scene = GTR::Scene::instance;
 
 	//add info to the debug panel about the camera
 	if (ImGui::TreeNode(camera,"Camera")) {
@@ -117,9 +148,18 @@ void Application::renderDebugGUI(void)
 		ImGui::TreePop();
 	}
 
-	//example to show prefab info: first param must be unique!
-	if (prefab_car && ImGui::TreeNode(prefab_car,"Prefab")) {
-		prefab_car->root.renderInMenu();
+	//add info to the debug panel about the prefab
+	if (ImGui::TreeNode("Prefabs")) {
+		for (auto prefab : scene->prefabs)
+		{
+			prefab->renderInMenu();
+		}
+		ImGui::TreePop();
+	}
+
+	//add info to the debug panel about the scene
+	if (ImGui::TreeNode(scene, "Scene")) {
+		scene->renderInMenu();
 		ImGui::TreePop();
 	}
 
@@ -130,6 +170,8 @@ void Application::update(double seconds_elapsed)
 {
 	float speed = seconds_elapsed * cam_speed; //the speed is defined by the seconds_elapsed so it goes constant
 	float orbit_speed = seconds_elapsed * 0.5;
+
+	//std::cout << GTR::Scene::instance->lights[0]->light_type;
 	
 	//async input to move the camera around
 	if (Input::isKeyPressed(SDL_SCANCODE_LSHIFT)) speed *= 10; //move faster with left shift
@@ -180,6 +222,7 @@ void Application::onKeyDown( SDL_KeyboardEvent event )
 	{
 		case SDLK_ESCAPE: must_exit = true; break; //ESC key, kill the app
 		case SDLK_F1: render_debug = !render_debug; break;
+		case SDLK_F2: render_grid = !render_grid; break;
 		case SDLK_f: camera->center.set(0, 0, 0); camera->updateViewMatrix(); break;
 		case SDLK_F5: Shader::ReloadAll(); break;
 	}

@@ -30,6 +30,7 @@ namespace GTR {
 		AlphaMode alpha_mode;	//could be NO_ALPHA, MASK (alpha cut) or BLEND (alpha blend)
 		float alpha_cutoff;		//pixels with alpha than this value shouldnt be rendered
 		bool two_sided;			//render both faces of the triangles
+		float tiles_number = 1;		//to control size and tileability of the material
 
 								//material properties
 		Vector4 color;			//color and opacity

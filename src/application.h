@@ -26,6 +26,7 @@ public:
 	int fps;
 	bool must_exit;
 	bool render_debug;
+	bool render_grid;
 	bool render_gui;
 
 	//some vars

@@ -3,6 +3,28 @@ flat basic.vs flat.fs
 texture basic.vs texture.fs
 depth quad.vs depth.fs
 multi basic.vs multi.fs
+phong basic.vs phong.fs
+
+// --------------------------------------------------------------------------
+
+\getTextureUniforms
+uniform vec4 u_color;
+uniform sampler2D u_texture;
+uniform float u_time;
+uniform float u_alpha_cutoff;
+uniform float u_tiles_number;
+
+// --------------------------------------------------------------------------
+
+\getColor
+vec2 uv = v_uv;
+vec4 color = u_color;
+color *= texture2D( u_texture, uv * u_tiles_number);
+
+if(color.a < u_alpha_cutoff)
+	discard;
+
+// --------------------------------------------------------------------------
 
 \basic.vs
 
@@ -189,4 +211,140 @@ void main()
 
 	//calcule the position of the vertex using the matrices
 	gl_Position = u_viewprojection * vec4( v_world_position, 1.0 );
+}
+
+// -----------------------------------------------------------------------
+
+
+// ----------------------------------------------------------------------
+
+\phong.fs
+
+#version 330 core
+
+in vec3 v_position;
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
+in vec4 v_color;
+
+in mat4 u_model;
+
+uniform vec3 u_camera_pos;
+uniform mat4 u_viewprojection;
+
+uniform vec3 u_ambient_light;
+uniform sampler2D u_occlusion_texture;
+uniform bool u_has_occlusion_texture;
+uniform sampler2D u_emissive_texture;
+uniform bool u_has_emissive_texture;
+
+uniform vec3 u_light_color;
+uniform int u_light_type;
+uniform vec3 u_light_direction;
+uniform vec3 u_light_position;
+uniform float u_light_maxdist;
+uniform float u_light_intensity;
+uniform vec3 u_light_spotDirection;
+uniform float u_light_spotCosineCutoff;
+uniform float u_light_spotExponent;
+uniform bool u_is_first_pass;
+
+#include "getTextureUniforms"
+
+//this will store the color for the pixel shader
+out vec4 FragColor;
+
+vec3 getDirectionalLight(vec3 N)
+{
+	//if the light is a directional light the light vector is the same for all pixels
+	vec3 L = normalize(u_light_direction);
+		
+	//compute how much is aligned
+	float NdotL = dot(N,L);
+
+	//light cannot be negative (but the dot product can)
+	NdotL = clamp( NdotL, 0.0, 1.0 );
+	
+	return NdotL * u_light_color * u_light_intensity;
+}
+
+vec3 getPointLight(float NdotL)
+{	
+	//compute distance
+	float light_distance = length(u_light_position - v_world_position);
+
+	//compute a linear attenuation factor
+	float att_factor = u_light_maxdist - light_distance;
+
+	//normalize factor
+	att_factor /= u_light_maxdist;
+
+	//ignore negative values
+	att_factor = max( att_factor, 0.0 );
+	
+	//quadratic att factor
+	att_factor *= att_factor;
+
+	//apply to amount of light
+	return ( NdotL * u_light_color) * att_factor * u_light_intensity;
+}
+
+vec3 getAmbientColor(vec2 uv)
+{
+	vec3 ambient_color = u_ambient_light;
+	
+	if (u_has_occlusion_texture)
+		ambient_color *= texture2D( u_occlusion_texture, uv * u_tiles_number).x;
+	return ambient_color;
+}
+
+void main()
+{	
+	
+	#include "getColor"
+	
+	//here we store the total amount of light
+	vec3 light = vec3(0.0);
+	
+	//ambient light
+	light += getAmbientColor(uv);
+
+	//normalize as they come interpolated so normalization is lost
+	vec3 N = normalize( v_normal );
+	
+	if( u_light_type == 0 ) {//directional  light
+		//store the amount of diffuse light
+		light += getDirectionalLight(N);
+	}	
+	else //point and spot light
+	{
+		
+		//light vector
+		vec3 L = normalize(u_light_position - v_world_position);
+		
+		//compute how much is aligned
+		float NdotL = dot(N,L);
+		
+		//light cannot be negative (but the dot product can)
+		NdotL = clamp( NdotL, 0.0, 1.0 );
+		
+		if (u_light_type == 1)	//point light
+			light += getPointLight(NdotL);
+		else	//spot light
+		{
+			vec3 D = normalize(u_light_direction);
+			float spotCosine = dot(D,-L);
+			if (spotCosine >= u_light_spotCosineCutoff)
+				light += pow(spotCosine,u_light_spotExponent) * u_light_color * u_light_intensity * NdotL;
+		}
+	}
+	
+	color.xyz *= light;
+	
+	//emissive light
+	if (u_has_emissive_texture && u_is_first_pass)
+		color.xyz += texture2D( u_emissive_texture, uv * u_tiles_number).xyz;
+	
+	FragColor = color;
 }

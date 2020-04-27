@@ -459,6 +459,16 @@ Vector4 operator * (const Matrix44& matrix, const Vector4& v)
 	return Vector4(x, y, z, w);
 }
 
+const Vector4ub Vector4ub::WHITE = Vector4ub(1.0, 1.0, 1.0, 1.0);
+const Vector4ub Vector4ub::BLACK = Vector4ub(0, 0, 0, 1.0);
+const Vector4ub Vector4ub::RED = Vector4ub(1.0, 0, 0, 1.0);
+const Vector4ub Vector4ub::GREEN = Vector4ub(0, 1.0, 0, 1.0);
+const Vector4ub Vector4ub::BLUE = Vector4ub(0, 0, 1.0, 1.0);
+const Vector4ub Vector4ub::YELLOW = Vector4ub(1.0, 1.0, 0, 1.0);
+const Vector4ub Vector4ub::TURQUESE = Vector4ub(0, 1.0, 1.0, 1.0);
+const Vector4ub Vector4ub::PINK = Vector4ub(1.0, 0, 1.0, 1.0);
+const Vector4ub Vector4ub::GRAY = Vector4ub(0.5, 0.5, 0.5, 1.0);
+
 void Matrix44::setUpAndOrthonormalize(Vector3 up)
 {
 	up.normalize();

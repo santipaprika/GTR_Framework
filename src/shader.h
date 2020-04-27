@@ -52,6 +52,7 @@ public:
 	virtual bool IsAttribute(const char* varname) { return (getAttribLocation(varname) != -1); } //attribute exist
 
 	//upload
+	void setUniform(const char* varname, int input) { assert(current == this); setUniform1(varname, input); }
 	void setUniform(const char* varname, float input) { assert(current == this); setUniform1(varname, input); }
 	void setUniform(const char* varname, const Vector2& input) { assert(current == this); setUniform2(varname, input.x, input.y ); }
 	void setUniform(const char* varname, const Vector3& input) { assert(current == this); setUniform3(varname, input.x, input.y, input.z); }

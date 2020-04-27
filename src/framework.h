@@ -174,11 +174,22 @@ public:
 		};
 		unsigned char v[4];
 	};
+	static const Vector4ub WHITE;
+	static const Vector4ub BLACK;
+	static const Vector4ub RED;
+	static const Vector4ub GREEN;
+	static const Vector4ub BLUE;
+	static const Vector4ub YELLOW;
+	static const Vector4ub TURQUESE;
+	static const Vector4ub PINK;
+	static const Vector4ub GRAY;
+
 	Vector4ub() { x = y = z = 0; }
 	Vector4ub(unsigned char x, unsigned char y, unsigned char z, unsigned char w = 0) { this->x = x; this->y = y; this->z = z; this->w = w; }
 	void set(unsigned char x, unsigned char y, unsigned char z, unsigned char w = 0) { this->x = x; this->y = y; this->z = z; this->w = w; }
-	Vector4ub operator = (const Vector4& a) { x = (unsigned char)a.x; y = (unsigned char)a.y; z = (unsigned char)a.z; w = (unsigned char)a.w; return *this;  }
+	Vector4ub operator = (const Vector4& a) { x = (unsigned char)a.x; y = (unsigned char)a.y; z = (unsigned char)a.z; w = (unsigned char)a.w; return *this; }
 	Vector4 toVector4() { return Vector4(x, y, z, w); }
+	Vector3 toVector3() { return Vector3(x, y, z); }
 };
 
 inline Vector4ub operator + (const Vector4ub& a, const Vector4ub& b) { return Vector4ub(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w ); }

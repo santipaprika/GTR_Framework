@@ -1,0 +1,65 @@
+﻿  gltf_loader.cpp
+d:\documents ii\gtr_framework\src\extra\cgltf.h(771): warning C4996: 'fopen': This function or variable may be unsafe. Consider using fopen_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.16299.0\ucrt\stdio.h(207): note: vea la declaración de 'fopen'
+d:\documents ii\gtr_framework\src\extra\cgltf.h(1005): warning C4996: 'strncpy': This function or variable may be unsafe. Consider using strncpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.16299.0\ucrt\string.h(337): note: vea la declaración de 'strncpy'
+d:\documents ii\gtr_framework\src\extra\cgltf.h(1006): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.16299.0\ucrt\string.h(132): note: vea la declaración de 'strcpy'
+d:\documents ii\gtr_framework\src\extra\cgltf.h(1010): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.16299.0\ucrt\string.h(132): note: vea la declaración de 'strcpy'
+d:\documents ii\gtr_framework\src\extra\cgltf.h(1415): warning C4996: 'strncpy': This function or variable may be unsafe. Consider using strncpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.16299.0\ucrt\string.h(337): note: vea la declaración de 'strncpy'
+d:\documents ii\gtr_framework\src\extra\cgltf.h(1420): warning C4996: 'strncpy': This function or variable may be unsafe. Consider using strncpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.16299.0\ucrt\string.h(337): note: vea la declaración de 'strncpy'
+d:\documents ii\gtr_framework\src\extra\cgltf.h(1965): warning C4996: 'strncpy': This function or variable may be unsafe. Consider using strncpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.16299.0\ucrt\string.h(337): note: vea la declaración de 'strncpy'
+d:\documents ii\gtr_framework\src\extra\cgltf.h(1975): warning C4996: 'strncpy': This function or variable may be unsafe. Consider using strncpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.16299.0\ucrt\string.h(337): note: vea la declaración de 'strncpy'
+d:\documents ii\gtr_framework\src\extra\cgltf.h(2054): warning C4996: 'strncpy': This function or variable may be unsafe. Consider using strncpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.16299.0\ucrt\string.h(337): note: vea la declaración de 'strncpy'
+d:\documents ii\gtr_framework\src\gltf_loader.cpp(59): warning C4018: '<': no coinciden signed/unsigned
+d:\documents ii\gtr_framework\src\gltf_loader.cpp(69): warning C4018: '<': no coinciden signed/unsigned
+d:\documents ii\gtr_framework\src\gltf_loader.cpp(112): warning C4018: '<': no coinciden signed/unsigned
+d:\documents ii\gtr_framework\src\gltf_loader.cpp(139): warning C4018: '<': no coinciden signed/unsigned
+d:\documents ii\gtr_framework\src\gltf_loader.cpp(161): warning C4018: '<': no coinciden signed/unsigned
+d:\documents ii\gtr_framework\src\gltf_loader.cpp(166): warning C4018: '<': no coinciden signed/unsigned
+d:\documents ii\gtr_framework\src\gltf_loader.cpp(328): warning C4018: '<': no coinciden signed/unsigned
+d:\documents ii\gtr_framework\src\gltf_loader.cpp(354): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.16299.0\ucrt\string.h(132): note: vea la declaración de 'strcpy'
+camera.obj : warning LNK4075: se omite '/EDITANDCONTINUE' debido a la especificación '/INCREMENTAL:NO'
+LINK : warning LNK4098: la biblioteca predeterminada'LIBCMT' entra en conflicto con otras bibliotecas; use la biblioteca /NODEFAULTLIB:biblioteca
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewActiveTexture definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewBlendEquation definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewBlendFuncSeparate definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewBindBuffer definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewBufferData definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewDeleteBuffers definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewGenBuffers definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewAttachShader definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewBlendEquationSeparate definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewCompileShader definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewCreateProgram definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewCreateShader definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewDeleteProgram definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewDeleteShader definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewDetachShader definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewEnableVertexAttribArray definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewGetAttribLocation definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewGetProgramInfoLog definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewGetProgramiv definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewGetShaderInfoLog definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewGetShaderiv definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewGetUniformLocation definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewLinkProgram definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewShaderSource definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewUniform1i definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewUniformMatrix4fv definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewUseProgram definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewVertexAttribPointer definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewDrawElementsBaseVertex definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewBindSampler definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewBindVertexArray definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewDeleteVertexArrays definido localmente
+imgui_impl_opengl3.obj : warning LNK4049: se importó el símbolo ___glewGenVertexArrays definido localmente
+glew32s.lib(glew.obj) : warning LNK4099: no se encontró PDB 'vc120.pdb' con 'glew32s.lib(glew.obj)' o en 'D:\Documents II\GTR_Framework\vc120.pdb'; se vinculará el objeto sin tener en cuenta información de depuración
+  visualstudio.vcxproj -> D:\Documents II\GTR_Framework\visualstudio\VS2015\..\..\framework_debug.exe

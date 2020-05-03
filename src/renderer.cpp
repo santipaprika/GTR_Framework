@@ -8,8 +8,78 @@
 #include "material.h"
 #include "utils.h"
 #include "entity.h"
+#include "application.h"
 
 using namespace GTR;
+
+//render all the scene to viewport
+void Renderer::renderSceneToViewport(GTR::Scene* scene, Camera* camera, Vector4 bg_color)
+{
+	Application* application = Application::instance;
+	application->rendering_shadowmap = false;
+
+	//be sure no errors present in opengl before start
+	checkGLErrors();
+
+	//set the clear color 
+	glClearColor(bg_color.x, bg_color.y, bg_color.z, bg_color.w);
+
+	//set the camera as default (used by some functions in the framework)
+	camera->enable();
+
+	setDefaultGLFlags();
+
+	if (application->render_wireframe)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	else
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+	renderScene(scene, camera);
+
+	if (application->render_debug)
+		drawGrid();
+}
+
+std::vector<Light*> Renderer::renderSceneToTexture(GTR::Scene* scene) 
+{
+	Application::instance->rendering_shadowmap = true;
+
+	std::vector<Light*> shadow_casting_lights;
+
+	//find lights that cast shadow (forced to spot atm)
+	for (auto light : GTR::Scene::instance->lights) {
+		if (!light->cast_shadows) continue;
+
+		light->shadow_fbo->bind();
+
+		//be sure no errors present in opengl before start
+		checkGLErrors();
+		setDefaultGLFlags();
+
+		Camera* light_cam = light->camera;
+		light_cam->enable();
+
+		renderScene(scene, light_cam);
+
+		light->shadow_fbo->unbind();
+
+		shadow_casting_lights.push_back(light);
+	}
+
+	return shadow_casting_lights;
+
+}
+
+void Renderer::setDefaultGLFlags() 
+{
+	// Clear the color and the depth buffer
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	//set default flags
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+}
 
 //render all the scene
 void Renderer::renderScene(GTR::Scene* scene, Camera* camera)
@@ -56,6 +126,34 @@ void Renderer::renderNode(const Matrix44& prefab_model, GTR::Node* node, Camera*
 		renderNode(prefab_model, node->children[i], camera);
 }
 
+
+void Renderer::manageBlendingAndCulling(GTR::Material* material, bool rendering_light, bool is_first_pass)
+{
+	glEnable(GL_BLEND);
+
+	//select the blending
+	if (material->alpha_mode == GTR::AlphaMode::BLEND)
+	{
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	}
+	else {
+		if (!rendering_light || is_first_pass) {
+			glDisable(GL_BLEND);
+		}
+		else {
+			glDepthFunc(GL_LEQUAL);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+		}
+	}
+
+	//select if render both sides of the triangles
+	if (material->two_sided)
+		glDisable(GL_CULL_FACE);
+	else
+		glEnable(GL_CULL_FACE);
+
+}
+
 //renders a mesh given its transform and material
 void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera)
 {
@@ -67,113 +165,84 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 	Shader* shader = NULL;
 	Texture* texture = NULL;
 
-	texture = material->color_texture;
-	//texture = material->emissive_texture;
-	//texture = material->metallic_roughness_texture;
-	//texture = material->normal_texture;
-	//texture = material->occlusion_texture;
-
-	//select the blending
-	if (material->alpha_mode == GTR::AlphaMode::BLEND)
-	{
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	}
-	else
-		glDisable(GL_BLEND);
-
-	//select if render both sides of the triangles
-	if(material->two_sided)
-		glDisable(GL_CULL_FACE);
-	else
-		glEnable(GL_CULL_FACE);
-
-	//chose a shader
-	if (texture) {
-		std::vector<Light*> scene_lights = Scene::instance->lights;
-		if (!scene_lights.empty())	shader = Shader::Get("phong");
-		else shader = Shader::Get("texture");
-	} else
-		shader = Shader::Get("flat");
-
-	//no shader? then nothing to render
-	if (!shader)
-		return;
-	shader->enable();
-
-	//upload uniforms
-	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
-	shader->setUniform("u_camera_position", camera->eye);
-
 	std::vector<Light*> scene_lights = Scene::instance->lights;
 
-	if (!scene_lights.empty()) {
+	if (Application::instance->rendering_shadowmap) {
+		shader = Shader::Get("flat");
+
+		if (material->alpha_mode == GTR::BLEND)
+			return;
+
+		shader->enable();
+		manageBlendingAndCulling(material, false);
+
+
+		shader->setUniform("u_camera_pos", camera->eye);
+		shader->setUniform("u_model", model);
+		shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+		mesh->render(GL_TRIANGLES);
 		
-		bool is_first_pass = true;
-		for (auto light : scene_lights)		// MULTI PASS
-		{
-			// skip iteration if light is far from mesh && light is point light && is not first pass (bc first pass must be done to paint the mesh with ambient light))
-			if (!mesh->testSphereCollision(model, light->model.getTranslation(), light->max_distance, Vector3(0, 0, 0), Vector3(0, 0, 0)) && light->light_type == GTR::POINT && !is_first_pass)
-				continue;
-			
-			glEnable(GL_BLEND);
-			if (material->alpha_mode == GTR::AlphaMode::BLEND)
-				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-			else
+	}
+	else {
+		texture = material->color_texture;
+
+		//chose a shader
+		if (texture) {
+			if (!scene_lights.empty())	shader = Shader::Get("phong");
+			else shader = Shader::Get("texture");
+		}
+		else
+			shader = Shader::Get("flat");
+
+		//no shader? then nothing to render
+		if (!shader)
+			return;
+		shader->enable();
+
+		//upload uniforms
+		shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+		shader->setUniform("u_camera_position", camera->eye);
+
+		if (!scene_lights.empty()) {
+
+			bool is_first_pass = true;
+			for (auto light : scene_lights)		// MULTI PASS
 			{
-				if (is_first_pass)
-					glDisable(GL_BLEND);
-				else {
-					glDepthFunc(GL_LEQUAL);
-					glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-				}
+				// skip iteration if light is far from mesh && light is point light && is not first pass (bc first pass must be done to paint the mesh with ambient light))
+				if (!mesh->testSphereCollision(model, light->model.getTranslation(), light->max_distance, Vector3(0, 0, 0), Vector3(0, 0, 0)) && light->light_type == GTR::POINT && !is_first_pass)
+					continue;
+
+				manageBlendingAndCulling(material, true, is_first_pass);
+
+				light->setUniforms(shader);	//DO BEFORE MATERIAL SET UNIFORMS
+				material->setUniforms(shader);
+
+				shader->setUniform("u_ambient_light", Scene::instance->ambientLight * is_first_pass);
+				shader->setUniform("u_is_first_pass", is_first_pass);
+				shader->setUniform("u_model", model);
+				//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
+				shader->setUniform("u_alpha_cutoff", material->alpha_mode == GTR::AlphaMode::MASK ? material->alpha_cutoff : 0);
+
+				//do the draw call that renders the mesh into the screen
+				mesh->render(GL_TRIANGLES);
+				is_first_pass = false;
 			}
+		}
+		else {
+			manageBlendingAndCulling(material, false);
 
-			light->setUniforms(shader);
-
-			shader->setUniform("u_has_occlusion_texture", false);
-			shader->setUniform("u_has_emissive_texture", false);
-
+			shader->setUniform("u_model", model);
+			shader->setUniform("u_color", material->color);
 			if (texture)
 				shader->setUniform("u_texture", texture, 0);
-
-			if (material->emissive_texture) {
-				shader->setUniform("u_emissive_texture", material->emissive_texture, 1);
-				shader->setUniform("u_has_emissive_texture", true);
-			}
-
-			if (material->occlusion_texture) {
-				shader->setUniform("u_occlusion_texture", material->occlusion_texture, 2);
-				shader->setUniform("u_has_occlusion_texture", true);
-			}
-
-			shader->setUniform("u_ambient_light", Scene::instance->ambientLight * is_first_pass);
-			shader->setUniform("u_is_first_pass", is_first_pass);
-			shader->setUniform("u_model", model);
-
-			shader->setUniform("u_color", material->color);
-			shader->setUniform("u_tiles_number", material->tiles_number);
 
 			//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
 			shader->setUniform("u_alpha_cutoff", material->alpha_mode == GTR::AlphaMode::MASK ? material->alpha_cutoff : 0);
 
 			//do the draw call that renders the mesh into the screen
 			mesh->render(GL_TRIANGLES);
-			is_first_pass = false;
+
 		}
-	}
-	else {
-		shader->setUniform("u_model", model);
-		shader->setUniform("u_color", material->color);
-		if (texture)
-			shader->setUniform("u_texture", texture, 0);
-
-		//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
-		shader->setUniform("u_alpha_cutoff", material->alpha_mode == GTR::AlphaMode::MASK ? material->alpha_cutoff : 0);
-
-		//do the draw call that renders the mesh into the screen
-		mesh->render(GL_TRIANGLES);
-
 	}
 
 	//disable shader

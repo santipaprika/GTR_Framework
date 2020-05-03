@@ -19,6 +19,7 @@
 
 Application* Application::instance = nullptr;
 Camera* camera = nullptr;
+FBO* fbo = nullptr;
 
 Vector4 bg_color(0.5, 0.5, 0.5, 1.0);
 GTR::Renderer* renderer;
@@ -61,9 +62,9 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor
 
 	//Load lights (the constructor adds them automatically to the scene)
-	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(20, 65, 90));
-	GTR::Light* light2 = new GTR::Light(Color::YELLOW, Vector3(0, 30, 80), Vector3(7.4, 0, 0), GTR::SPOT);
-	GTR::Light* light3 = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0), Vector3(-9, 0, 0), GTR::DIRECTIONAL);
+	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(20, 200, 90), Vector3(0, -0.9, -0.1), GTR::SPOT);
+	GTR::Light* light2 = new GTR::Light(Color::GREEN, Vector3(0, 0, 0), Vector3(0.3, -0.5, 0.2), GTR::DIRECTIONAL);
+	GTR::Light* light3 = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0), Vector3(0, -0.1, -0.8), GTR::DIRECTIONAL);
 
 	//Add lights into scene
 	scene->AddEntity(light1);
@@ -90,6 +91,9 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(0,0,0)));
 	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(200,0,60), Vector3(0,40,0)));
 
+	rendering_shadowmap = true;
+	fbo = new FBO();
+	fbo->create(window_width, window_height);
 	//hide the cursor
 	SDL_ShowCursor(!mouse_locked); //hide or show the mouse
 }
@@ -97,34 +101,21 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 //what to do when the image has to be draw
 void Application::render(void)
 {
-	//be sure no errors present in opengl before start
-	checkGLErrors();
+	std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneToTexture(GTR::Scene::instance);
+	renderer->renderSceneToViewport(GTR::Scene::instance, camera, bg_color);
 
-	//set the clear color (the background color)
-	glClearColor(bg_color.x, bg_color.y, bg_color.z, bg_color.w);
-
-	// Clear the color and the depth buffer
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	//set the camera as default (used by some functions in the framework)
-	camera->enable();
-
-	//set default flags
-	glDisable(GL_BLEND);
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_CULL_FACE);
-	if(render_wireframe)
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	else
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-	//lets render prefabs
-	renderer->renderScene(GTR::Scene::instance, camera);
-
-	//Draw the floor grid, helpful to have a reference point
-	if(render_debug)
-		drawGrid();
-
+	for (int i = 0; i < shadow_caster_lights.size(); i++)
+	{
+		GTR::Light* light = shadow_caster_lights[i];
+		glDisable(GL_DEPTH_TEST);
+		Shader* shader = Shader::Get("depth");
+		shader->enable();
+		shader->setUniform("u_camera_nearfar", Vector2(light->camera->near_plane, light->camera->far_plane));
+		glViewport(i*200, 0, 200, 200);
+		if (light->light_type == GTR::DIRECTIONAL) light->shadow_fbo->depth_texture->toViewport();
+		else  if (light->light_type == GTR::SPOT) light->shadow_fbo->depth_texture->toViewport(shader);
+	}
+	
 	//the swap buffers is done in the main loop after this function
 }
 

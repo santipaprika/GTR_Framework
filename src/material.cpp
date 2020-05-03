@@ -23,6 +23,26 @@ void Material::registerMaterial(const char* name)
 	sMaterials[name] = this;
 }
 
+void Material::setUniforms(Shader* shader) {
+	shader->setUniform("u_has_occlusion_texture", false);
+	shader->setUniform("u_has_emissive_texture", false);
+
+	if (color_texture)
+		shader->setUniform("u_texture", color_texture, 1);
+
+	if (emissive_texture) {
+		shader->setUniform("u_emissive_texture", emissive_texture, 2);
+		shader->setUniform("u_has_emissive_texture", true);
+	}
+
+	if (occlusion_texture) {
+		shader->setUniform("u_occlusion_texture", occlusion_texture, 3);
+		shader->setUniform("u_has_occlusion_texture", true);
+	}
+
+	shader->setUniform("u_color", color);
+	shader->setUniform("u_tiles_number", tiles_number);
+}
 void Material::renderInMenu()
 {
 	#ifndef SKIP_IMGUI

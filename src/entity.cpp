@@ -1,30 +1,25 @@
 
 #include "entity.h"
+#include "application.h"
 #include <cassert>
 
 using namespace GTR;
 
-BaseEntity::BaseEntity(Vector3 position, Vector3 eulerAngles, eType type, bool visible)
+BaseEntity::BaseEntity(Vector3 position, Vector3 frontVector, eType type, bool visible)
 {
-	Matrix44 auxModel = Matrix44::IDENTITY;
-	Vector3 eulerAnglesRad = eulerAngles * (PI / 180.0);
+	model = Matrix44::IDENTITY;
+	Vector3 eulerAnglesRad = frontVector * (PI / 180.0);
 
-	float matrixTranslation[3], matrixRotation[3], matrixScale[3];
-	ImGuizmo::DecomposeMatrixToComponents(auxModel.m, matrixTranslation, matrixRotation, matrixScale);
-	matrixTranslation[0] = position.x;	matrixTranslation[1] = position.y;	matrixTranslation[2] = position.z;
-	matrixRotation[0] = eulerAngles.x;	matrixRotation[1] = eulerAngles.y;	matrixRotation[2] = eulerAngles.z;
-	ImGuizmo::RecomposeMatrixFromComponents(matrixTranslation, matrixRotation, matrixScale, auxModel.m);
-
-	/*auxModel.rotate(eulerAnglesRad.x, auxModel.frontVector());
-	auxModel.rotate(eulerAnglesRad.y, auxModel.topVector());
-	auxModel.rotate(eulerAnglesRad.z, auxModel.rightVector());
-	auxModel.translateGlobal(position.x, position.y, position.z);*/
-	this->model = auxModel;
+	model.rotate(eulerAnglesRad.x, model.frontVector());
+	model.rotate(eulerAnglesRad.y, model.topVector());
+	model.rotate(eulerAnglesRad.z, model.rightVector());
+	model.translateGlobal(position.x, position.y, position.z);
+	
 	this->type = type;
 	this->visible = visible;
 }
 
-PrefabEntity::PrefabEntity(Prefab* prefab, Vector3 position, Vector3 eulerAngles, bool visible) : BaseEntity(position, eulerAngles, PREFAB, visible)
+PrefabEntity::PrefabEntity(Prefab* prefab, Vector3 position, Vector3 frontVector, bool visible) : BaseEntity(position, frontVector, PREFAB, visible)
 {
 	this->prefab = prefab;
 }
@@ -32,6 +27,7 @@ PrefabEntity::PrefabEntity(Prefab* prefab, Vector3 position, Vector3 eulerAngles
 void PrefabEntity::renderInMenu()
 {
 	if (this->prefab && ImGui::TreeNode(this, this->prefab->name.c_str())) {
+		Vector3 frontVector = model.frontVector();
 		float matrixTranslation[3], matrixRotation[3], matrixScale[3];
 		ImGuizmo::DecomposeMatrixToComponents(model.m, matrixTranslation, matrixRotation, matrixScale);
 		ImGui::DragFloat3("Position", matrixTranslation, 0.1f);
@@ -43,11 +39,33 @@ void PrefabEntity::renderInMenu()
 	}
 }
 
-Light::Light(Color color, Vector3 position, Vector3 eulerAngles, eLightType light_type, float intensity, bool visible) : BaseEntity(position, eulerAngles, LIGHT, visible)
+Light::Light(Color color, Vector3 position, Vector3 frontVector, eLightType light_type, float intensity, bool visible) : BaseEntity(position, Vector3(0,0,0), LIGHT, visible)
 {
+	if (frontVector.length() == 0) frontVector = Vector3(0.1,-0.9,0.0);
+	model.setFrontAndOrthonormalize(frontVector);
+
 	this->color = color.toVector3();
 	this->intensity = intensity;
 	this->light_type = light_type;
+
+	if (light_type == GTR::POINT)
+		cast_shadows = false;
+
+	camera = new Camera();
+	//camera->setOrthographic(-100, 100, -100, 100, 0.1, 1000);
+	if (cast_shadows) {
+		shadow_fbo = new FBO();
+		shadow_fbo->create(4096, 4096);
+		if (light_type == GTR::SPOT) {
+			camera->lookAt(model.getTranslation(), model * Vector3(0, 0, 1), model.topVector());
+			camera->setPerspective((float)(2 * spot_cutoff_in_deg), 1.0f, 0.1f, 5000.f);
+		}
+		if (light_type == GTR::DIRECTIONAL) {
+			Vector3 cam_position = model.getTranslation() * Vector3(1, 0, 1) - model.frontVector() * max_distance;
+			camera->lookAt(cam_position, cam_position + model.frontVector(), model.topVector());
+			camera->setOrthographic(-ortho_cam_size, ortho_cam_size, -ortho_cam_size, ortho_cam_size, 0.1f, 5000.f);
+		}
+	}
 }
 
 void Light::setUniforms(Shader* shader)
@@ -58,35 +76,79 @@ void Light::setUniforms(Shader* shader)
 	shader->setUniform("u_light_position", model.getTranslation());
 	shader->setUniform("u_light_maxdist", max_distance);
 	shader->setUniform("u_light_intensity", intensity);
-	shader->setUniform("u_light_spotCosineCutoff", spotCosineCutoff);
-	shader->setUniform("u_light_spotExponent", spotExponent);
+	shader->setUniform("u_light_spotCosineCutoff", cosf(spot_cutoff_in_deg * DEG2RAD));
+	shader->setUniform("u_light_spotExponent", spot_exponent);
+
+	if (!shadow_fbo) return;
+
+	//get the depth texture from the FBO
+	Texture* shadowmap = shadow_fbo->depth_texture;
+	shader->setUniform("u_shadowmap", shadowmap, 0);
+
+	//also get the viewprojection from the light
+	Matrix44 shadow_proj = camera->viewprojection_matrix;
+
+	//pass it to the shader
+	shader->setUniform("u_shadow_viewproj", shadow_proj);
+
+	//we will also need the shadow bias
+	shader->setUniform("u_shadow_bias", shadow_bias);
+
+	shader->setUniform("u_cast_shadows", cast_shadows);
 }
 
 void Light::renderInMenu()
 {
+	bool light_type_changed = false;
 	ImGui::ColorEdit3("Light Color", (float*)&color);
-	ImGui::Combo("Light Type", (int*)&light_type, "DIRECTIONAL\0POINT\0SPOT", 3);
+	light_type_changed = ImGui::Combo("Light Type", (int*)&light_type, "DIRECTIONAL\0POINT\0SPOT", 3);
 	float matrixTranslation[3], matrixRotation[3], matrixScale[3];
+	Vector3 frontVector = model.frontVector();
 	ImGuizmo::DecomposeMatrixToComponents(model.m, matrixTranslation, matrixRotation, matrixScale);
+	ImGui::DragFloat3("Position", matrixTranslation, 0.1f);
+	ImGui::Text("Light Camera:");
+	ImGui::SliderFloat("Near", (float*)&camera->near_plane, 0.1f, camera->far_plane);
+	ImGui::SliderFloat("Far", (float*)&camera->far_plane, camera->near_plane, 10000.0f);
+	ImGui::DragFloat("Shadow Bias", (float*)&shadow_bias, 0.001f);
+	ImGui::Checkbox("Cast Shadows", &cast_shadows);
+	ImGui::SliderFloat("Max Distance", (float*)&max_distance, 0, 1000);
 	switch (light_type)
 	{
 	case GTR::DIRECTIONAL:
 		ImGui::SliderFloat("Intensity", (float*)&intensity, 0, 100);
-		ImGui::DragFloat3("Direction", matrixRotation, 0.1f);
+		ImGui::SliderFloat("Camera Size", (float*)&ortho_cam_size, 0.1, 1000);
+		ImGui::SliderFloat3("Direction", (float*)&frontVector[0], -1, 1);
 		break;
 	case GTR::POINT:
-		ImGui::SliderFloat("Max Distance", (float*)&max_distance, 0, 1000);
 		ImGui::SliderFloat("Intensity", (float*)&intensity, 0, 100);
-		ImGui::DragFloat3("Position", matrixTranslation, 0.1f);
 		break;
 	case GTR::SPOT:
 		ImGui::SliderFloat("Intensity", (float*)&intensity, 0, 100);
-		ImGui::DragFloat3("Position", matrixTranslation, 0.1f);
-		ImGui::DragFloat3("Direction", matrixRotation, 0.1f);
-		ImGui::SliderFloat("Cosine Cutoff", (float*)&spotCosineCutoff, 0, 1);
-		ImGui::SliderFloat("Spot Exponent", (float*)&spotExponent, 0, 100);
+		ImGui::SliderFloat3("Direction", (float*)&frontVector[0], -1, 1);
+		ImGui::SliderFloat("Cosine Cutoff", (float*)&spot_cutoff_in_deg, 0, 90);
+		ImGui::SliderFloat("Spot Exponent", (float*)&spot_exponent, 0, 100);
+		ImGui::SliderFloat("FOV", (float*)&camera->fov, 0.0f, 180.0f);
 	}
+
+	if (frontVector.length() == 0) frontVector = Vector3(0.1, -0.9, 0.0);
 	ImGuizmo::RecomposeMatrixFromComponents(matrixTranslation, matrixRotation, matrixScale, model.m);
+	model.setFrontAndOrthonormalize(frontVector);
+	switch (light_type) {
+	case GTR::DIRECTIONAL:
+	{
+		camera->setOrthographic(-ortho_cam_size, ortho_cam_size, -ortho_cam_size, ortho_cam_size, camera->near_plane, camera->far_plane);
+		Vector3 cam_position = Vector3(model.getTranslation().x, 0, model.getTranslation().z) - model.frontVector() * max_distance;
+		camera->lookAt(cam_position, cam_position + model.frontVector(), model.topVector());
+		break;
+	}
+	case GTR::SPOT:
+		if (ImGui::Button("Update FOV") || light_type_changed)
+			camera->setPerspective(2 * spot_cutoff_in_deg, 1, camera->near_plane, camera->far_plane);
+		camera->lookAt(model.getTranslation(), model.getTranslation() + model.frontVector(), model.topVector());
+		break;
+	case GTR::POINT:
+		cast_shadows = false;
+	}
 	ImGui::TreePop();
 }
 

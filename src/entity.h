@@ -4,6 +4,8 @@
 #include "utils.h"
 #include "prefab.h"
 #include "shader.h"
+#include "camera.h"
+#include "fbo.h"
 
 namespace GTR {
 
@@ -16,7 +18,7 @@ namespace GTR {
 		bool visible; //says if the object must be rendered
 		eType type; //tells us the type of this entity from a list of possible types
 
-		BaseEntity(Vector3 position = Vector3(0, 0, 0), Vector3 rotation = Vector3(0, 0, 0), eType type = BASE_NODE, bool visible = true);
+		BaseEntity(Vector3 position = Vector3(0, 0, 0), Vector3 frontVector = Vector3(0, 0, 0), eType type = BASE_NODE, bool visible = true);
 	};
 
 	class PrefabEntity : public BaseEntity
@@ -24,7 +26,7 @@ namespace GTR {
 	public:
 		Prefab* prefab;
 
-		PrefabEntity(Prefab* prefab, Vector3 position = Vector3(0,0,0), Vector3 eulerAngles = Vector3(0,0,0), bool visible = true);
+		PrefabEntity(Prefab* prefab, Vector3 position = Vector3(0,0,0), Vector3 frontVector = Vector3(0,0,0), bool visible = true);
 		void renderInMenu();
 	};
 
@@ -34,13 +36,18 @@ namespace GTR {
 	public:
 		Vector3 color; //the color of the light
 		float intensity; //the amount of light emited
-		float max_distance = 50; //max distance of light effect
+		float max_distance = 100.0; //max distance of light effect
 		eLightType light_type; //if the light is OMNI, SPOT or DIRECTIONAL
+		Camera* camera;
+		float ortho_cam_size = 500;
+		FBO* shadow_fbo = NULL;
+		float shadow_bias = 0.01;
+		bool cast_shadows = true;
 
-		float spotCosineCutoff = 0.5;
-		float spotExponent = 10;
+		float spot_cutoff_in_deg = 45;
+		float spot_exponent = 10;
 
-		Light(Color color = Color(1, 1, 1, 1), Vector3 position = Vector3(0, 0, 0), Vector3 eulerAngles = Vector3(0,0,0), eLightType light_type = POINT, float intensity = 1, bool visible = true);
+		Light(Color color = Color(1, 1, 1, 1), Vector3 position = Vector3(0, 0, 0), Vector3 frontVector = Vector3(0,-0.9,0.1), eLightType light_type = POINT, float intensity = 1, bool visible = true);
 		void setUniforms(Shader* shader);
 		void renderInMenu();
 	};

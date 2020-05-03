@@ -117,7 +117,6 @@ void main()
 	vec2 uv = v_uv;
 	vec4 color = u_color;
 	color *= texture( u_texture, uv );
-
 	if(color.a < u_alpha_cutoff)
 		discard;
 
@@ -213,8 +212,6 @@ void main()
 	gl_Position = u_viewprojection * vec4( v_world_position, 1.0 );
 }
 
-// -----------------------------------------------------------------------
-
 
 // ----------------------------------------------------------------------
 
@@ -250,6 +247,11 @@ uniform float u_light_spotCosineCutoff;
 uniform float u_light_spotExponent;
 uniform bool u_is_first_pass;
 
+uniform sampler2D u_shadowmap;
+uniform mat4 u_shadow_viewproj;
+uniform float u_shadow_bias;
+uniform bool u_cast_shadows;
+
 #include "getTextureUniforms"
 
 //this will store the color for the pixel shader
@@ -258,7 +260,7 @@ out vec4 FragColor;
 vec3 getDirectionalLight(vec3 N)
 {
 	//if the light is a directional light the light vector is the same for all pixels
-	vec3 L = normalize(u_light_direction);
+	vec3 L = normalize(-u_light_direction);	//light vector goes in opposite direction
 		
 	//compute how much is aligned
 	float NdotL = dot(N,L);
@@ -299,6 +301,42 @@ vec3 getAmbientColor(vec2 uv)
 	return ambient_color;
 }
 
+float getShadowFactor(bool add_light_outside)
+{
+	float out_of_bound_light = 0.0;
+	if (add_light_outside) out_of_bound_light = 1.0;
+	//project our 3D position to the shadowmap
+	vec4 proj_pos = u_shadow_viewproj * vec4(v_world_position,1.0);
+
+	//from homogeneus space to clip space
+	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+
+	//from clip space to uv space
+	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+
+	//get point depth (from -1 to 1)
+	float real_depth = (proj_pos.z - u_shadow_bias) / proj_pos.w;
+
+	//normalize from [-1..+1] to [0..+1]
+	real_depth = real_depth * 0.5 + 0.5;
+
+	//read depth from depth buffer in [0..+1]
+	float shadow_depth = texture2D(u_shadowmap, shadow_uv).x;
+
+	//compute final shadow factor by comparing
+	float shadow_factor = 1.0;
+	if( shadow_depth < real_depth )
+		shadow_factor = 0.0;
+	//it is before near or behind far plane
+	if(real_depth < 0.0 || real_depth > 1.0)
+		shadow_factor = out_of_bound_light;	
+	//it is outside on the sides
+	if(shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
+		shadow_factor = out_of_bound_light;
+	
+	return shadow_factor;
+}
+
 void main()
 {	
 	
@@ -313,9 +351,11 @@ void main()
 	//normalize as they come interpolated so normalization is lost
 	vec3 N = normalize( v_normal );
 	
-	if( u_light_type == 0 ) {//directional  light
+	if( u_light_type == 0 ) {	//directional  light
 		//store the amount of diffuse light
-		light += getDirectionalLight(N);
+		vec3 dir_light = getDirectionalLight(N);
+		if (u_cast_shadows)	light += dir_light * getShadowFactor(true);
+		else light += dir_light;
 	}	
 	else //point and spot light
 	{
@@ -336,7 +376,11 @@ void main()
 			vec3 D = normalize(u_light_direction);
 			float spotCosine = dot(D,-L);
 			if (spotCosine >= u_light_spotCosineCutoff)
-				light += pow(spotCosine,u_light_spotExponent) * u_light_color * u_light_intensity * NdotL;
+			{
+				vec3 spot_light = pow(spotCosine,u_light_spotExponent) * u_light_color * u_light_intensity * NdotL;
+				if (u_cast_shadows) light += spot_light * getShadowFactor(false);
+				else light += spot_light;
+			}
 		}
 	}
 	

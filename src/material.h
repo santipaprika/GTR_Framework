@@ -1,6 +1,7 @@
 #pragma once
 
 #include "framework.h"
+#include "shader.h"
 #include <cassert>
 #include <map>
 #include <string>
@@ -52,6 +53,8 @@ namespace GTR {
 		}
 		Material(Texture* texture) : Material() { color_texture = texture; }
 		virtual ~Material();
+
+		void setUniforms(Shader* shader);
 
 		//render gui info inside the panel
 		void renderInMenu();

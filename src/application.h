@@ -28,6 +28,8 @@ public:
 	bool render_debug;
 	bool render_grid;
 	bool render_gui;
+	
+	bool rendering_shadowmap;
 
 	//some vars
 	bool mouse_locked; //tells if the mouse is locked (blocked in the center and not visible)

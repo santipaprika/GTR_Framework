@@ -875,7 +875,7 @@ bool Mesh::writeBin(const char* filename)
 	info.bind_matrix = bind_matrix;
 	std::string names = join(material_name, "|");
 	memset(info.material_names, 0, 255);
-	memcpy(info.material_names, names.c_str(), fmin(names.size(), 255));
+	memcpy(info.material_names, names.c_str(), fmin( names.size(),255) );
 	info.material_names[255] = 0;
 
 	info.streams[0] = interleaved.size() ? 'I' : 'V';
@@ -1079,15 +1079,15 @@ bool Mesh::loadOBJ(const char* filename)
 	unsigned int vertex_i = 0;
 
 	//parse file
-	while (*pos != 0)
+	while(*pos != 0)
 	{
 		if (*pos == '\n') pos++;
 		if (*pos == '\r') pos++;
 
 		//read one line
 		i = 0;
-		while (i < 255 && pos[i] != '\n' && pos[i] != '\r' && pos[i] != 0) i++;
-		memcpy(line, pos, i);
+		while(i < 255 && pos[i] != '\n' && pos[i] != '\r' && pos[i] != 0) i++;
+		memcpy(line,pos,i);
 		line[i] = 0;
 		pos = pos + i;
 
@@ -1095,26 +1095,26 @@ bool Mesh::loadOBJ(const char* filename)
 		if (*line == '#' || *line == 0) continue; //comment
 
 		//tokenize line
-		std::vector<std::string> tokens = tokenize(line, " ");
+		std::vector<std::string> tokens = tokenize(line," ");
 
 		if (tokens.empty()) continue;
 
 		if (tokens[0] == "v" && tokens.size() == 4)
 		{
-			Vector3 v((float)atof(tokens[1].c_str()), (float)atof(tokens[2].c_str()), (float)atof(tokens[3].c_str()));
+			Vector3 v((float)atof(tokens[1].c_str()), (float)atof(tokens[2].c_str()), (float)atof(tokens[3].c_str()) );
 			indexed_positions.push_back(v);
 
-			aabb_min.setMin(v);
-			aabb_max.setMax(v);
+			aabb_min.setMin( v );
+			aabb_max.setMax( v );
 		}
 		else if (tokens[0] == "vt" && tokens.size() > 2)
 		{
-			Vector2 v((float)atof(tokens[1].c_str()), (float)atof(tokens[2].c_str()));
+			Vector2 v((float)atof(tokens[1].c_str()), (float)atof(tokens[2].c_str()) );
 			indexed_uvs.push_back(v);
 		}
 		else if (tokens[0] == "vn" && tokens.size() == 4)
 		{
-			Vector3 v((float)atof(tokens[1].c_str()), (float)atof(tokens[2].c_str()), (float)atof(tokens[3].c_str()));
+			Vector3 v((float)atof(tokens[1].c_str()), (float)atof(tokens[2].c_str()), (float)atof(tokens[3].c_str()) );
 			indexed_normals.push_back(v);
 		}
 		else if (tokens[0] == "usemtl") //surface? it appears one time before the faces
@@ -1123,7 +1123,7 @@ bool Mesh::loadOBJ(const char* filename)
 		}
 		else if (tokens[0] == "g") //surface? it appears one time before the faces
 		{
-			if (vertices.size())
+			if(vertices.size())
 				material_range.push_back((unsigned int)(vertices.size() / 3.0));
 		}
 		else if (tokens[0] == "f" && tokens.size() >= 4)

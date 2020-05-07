@@ -6,7 +6,6 @@
 #include "fbo.h"
 #include "shader.h"
 #include "input.h"
-#include "extra/hdre.h"
 #include "includes.h"
 #include "prefab.h"
 #include "gltf_loader.h"
@@ -19,6 +18,8 @@
 
 Application* Application::instance = nullptr;
 Camera* camera = nullptr;
+GTR::Prefab* prefab_car = nullptr;
+GTR::Renderer* renderer = nullptr;
 FBO* fbo = nullptr;
 
 Vector4 bg_color(0.5, 0.5, 0.5, 1.0);
@@ -33,7 +34,6 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	instance = this;
 	must_exit = false;
 	render_debug = true;
-	render_grid = false;
 	render_gui = true;
 
 	render_wireframe = false;
@@ -48,10 +48,10 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	mouse_locked = false;
 
 	//loads and compiles several shaders from one single file
-	//change to "data/shader_atlas_osx.txt" if you are in XCODE
-	if (!Shader::LoadAtlas("data/shader_atlas.txt"))
-		exit(1);
-	checkGLErrors();
+    //change to "data/shader_atlas_osx.txt" if you are in XCODE
+	if(!Shader::LoadAtlas("data/shader_atlas.txt"))
+        exit(1);
+    checkGLErrors();
 
 	// Create camera
 	camera = new Camera();
@@ -110,9 +110,6 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(0,0,0)));
 	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(200,0,60), Vector3(0,40,0)));
 
-	rendering_shadowmap = true;
-	fbo = new FBO();
-	fbo->create(window_width, window_height);
 	//hide the cursor
 	SDL_ShowCursor(!mouse_locked); //hide or show the mouse
 }
@@ -131,8 +128,8 @@ void Application::render(void)
 //called to render the GUI from
 void Application::renderDebugGUI(void)
 {
-	#ifndef SKIP_IMGUI //to block this code from compiling if we want
-	
+#ifndef SKIP_IMGUI //to block this code from compiling if we want
+
 	//System stats
 	ImGui::Text(getGPUStats().c_str());					   // Display some text (you can use a format strings too)
 
@@ -143,7 +140,7 @@ void Application::renderDebugGUI(void)
 	GTR::Scene* scene = GTR::Scene::instance;
 
 	//add info to the debug panel about the camera
-	if (ImGui::TreeNode(camera,"Camera")) {
+	if (ImGui::TreeNode(camera, "Camera")) {
 		camera->renderInMenu();
 		ImGui::TreePop();
 	}
@@ -170,8 +167,6 @@ void Application::update(double seconds_elapsed)
 {
 	float speed = seconds_elapsed * cam_speed; //the speed is defined by the seconds_elapsed so it goes constant
 	float orbit_speed = seconds_elapsed * 0.5;
-
-	//std::cout << GTR::Scene::instance->lights[0]->light_type;
 	
 	//async input to move the camera around
 	if (Input::isKeyPressed(SDL_SCANCODE_LSHIFT)) speed *= 10; //move faster with left shift
@@ -181,21 +176,26 @@ void Application::update(double seconds_elapsed)
 	if (Input::isKeyPressed(SDL_SCANCODE_D) || Input::isKeyPressed(SDL_SCANCODE_RIGHT)) camera->move(Vector3(-1.0f, 0.0f, 0.0f) * speed);
 
 	//mouse input to rotate the cam
-	if (mouse_locked || Input::mouse_state & SDL_BUTTON(SDL_BUTTON_RIGHT)) //move in first person view
+	#ifndef SKIP_IMGUI
+	if (!ImGuizmo::IsUsing())
+	#endif
 	{
-		camera->rotate(-Input::mouse_delta.x * orbit_speed * 0.5, Vector3(0,1,0));
-		Vector3 right = camera->getLocalVector(Vector3(1, 0, 0));
-		camera->rotate(-Input::mouse_delta.y * orbit_speed * 0.5, right);
-	}
-	else //orbit around center
-	{
-		bool mouse_blocked = false;
-		#ifndef SKIP_IMGUI
-			mouse_blocked = ImGui::IsAnyWindowHovered() || ImGui::IsAnyItemHovered() || ImGui::IsAnyItemActive();
-		#endif
-		if (Input::mouse_state & SDL_BUTTON(SDL_BUTTON_LEFT) && !mouse_blocked) //is left button pressed?
+		if (mouse_locked || Input::mouse_state & SDL_BUTTON(SDL_BUTTON_RIGHT)) //move in first person view
 		{
-			camera->orbit(-Input::mouse_delta.x * orbit_speed, Input::mouse_delta.y * orbit_speed);
+			camera->rotate(-Input::mouse_delta.x * orbit_speed * 0.5, Vector3(0, 1, 0));
+			Vector3 right = camera->getLocalVector(Vector3(1, 0, 0));
+			camera->rotate(-Input::mouse_delta.y * orbit_speed * 0.5, right);
+		}
+		else //orbit around center
+		{
+			bool mouse_blocked = false;
+			#ifndef SKIP_IMGUI
+						mouse_blocked = ImGui::IsAnyWindowHovered() || ImGui::IsAnyItemHovered() || ImGui::IsAnyItemActive();
+			#endif
+			if (Input::mouse_state & SDL_BUTTON(SDL_BUTTON_LEFT) && !mouse_blocked) //is left button pressed?
+			{
+				camera->orbit(-Input::mouse_delta.x * orbit_speed, Input::mouse_delta.y * orbit_speed);
+			}
 		}
 	}
 	
@@ -214,6 +214,76 @@ void Application::update(double seconds_elapsed)
 		//ImGui::SetCursorPos(ImVec2(Input::mouse_position.x, Input::mouse_position.y));
 	}
 }
+
+void Application::renderDebugGizmo()
+{
+	if (!prefab)
+		return;
+
+	//example of matrix we want to edit, change this to the matrix of your entity
+	Matrix44& matrix = prefab->root.model;
+
+	#ifndef SKIP_IMGUI
+
+	static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::TRANSLATE);
+	static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
+	if (ImGui::IsKeyPressed(90))
+		mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+	if (ImGui::IsKeyPressed(69))
+		mCurrentGizmoOperation = ImGuizmo::ROTATE;
+	if (ImGui::IsKeyPressed(82)) // r Key
+		mCurrentGizmoOperation = ImGuizmo::SCALE;
+	if (ImGui::RadioButton("Translate", mCurrentGizmoOperation == ImGuizmo::TRANSLATE))
+		mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Rotate", mCurrentGizmoOperation == ImGuizmo::ROTATE))
+		mCurrentGizmoOperation = ImGuizmo::ROTATE;
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Scale", mCurrentGizmoOperation == ImGuizmo::SCALE))
+		mCurrentGizmoOperation = ImGuizmo::SCALE;
+	float matrixTranslation[3], matrixRotation[3], matrixScale[3];
+	ImGuizmo::DecomposeMatrixToComponents(matrix.m, matrixTranslation, matrixRotation, matrixScale);
+	ImGui::InputFloat3("Tr", matrixTranslation, 3);
+	ImGui::InputFloat3("Rt", matrixRotation, 3);
+	ImGui::InputFloat3("Sc", matrixScale, 3);
+	ImGuizmo::RecomposeMatrixFromComponents(matrixTranslation, matrixRotation, matrixScale, matrix.m);
+
+	if (mCurrentGizmoOperation != ImGuizmo::SCALE)
+	{
+		if (ImGui::RadioButton("Local", mCurrentGizmoMode == ImGuizmo::LOCAL))
+			mCurrentGizmoMode = ImGuizmo::LOCAL;
+		ImGui::SameLine();
+		if (ImGui::RadioButton("World", mCurrentGizmoMode == ImGuizmo::WORLD))
+			mCurrentGizmoMode = ImGuizmo::WORLD;
+	}
+	static bool useSnap(false);
+	if (ImGui::IsKeyPressed(83))
+		useSnap = !useSnap;
+	ImGui::Checkbox("", &useSnap);
+	ImGui::SameLine();
+	static Vector3 snap;
+	switch (mCurrentGizmoOperation)
+	{
+	case ImGuizmo::TRANSLATE:
+		//snap = config.mSnapTranslation;
+		ImGui::InputFloat3("Snap", &snap.x);
+		break;
+	case ImGuizmo::ROTATE:
+		//snap = config.mSnapRotation;
+		ImGui::InputFloat("Angle Snap", &snap.x);
+		break;
+	case ImGuizmo::SCALE:
+		//snap = config.mSnapScale;
+		ImGui::InputFloat("Scale Snap", &snap.x);
+		break;
+	}
+	ImGuiIO& io = ImGui::GetIO();
+	ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+	ImGuizmo::Manipulate(camera->view_matrix.m, camera->projection_matrix.m, mCurrentGizmoOperation, mCurrentGizmoMode, matrix.m, NULL, useSnap ? &snap.x : NULL);
+	#endif
+}
+
+
 
 //Keyboard event handler (sync input)
 void Application::onKeyDown( SDL_KeyboardEvent event )

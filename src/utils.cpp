@@ -123,10 +123,10 @@ bool readFile(const std::string& filename, std::string& content)
 
 bool checkGLErrors()
 {
-#ifndef _DEBUG
-	return true;
-#endif
-
+	#ifndef _DEBUG
+        return true;
+    #endif
+    
 	GLenum errCode;
 	const GLubyte *errString;
 

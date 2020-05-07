@@ -378,7 +378,7 @@ float ComputeSignedAngle( Vector2 a, Vector2 b); //returns the angle between bot
 inline float ease(float f) { return f*f*f*(f*(f*6.0f - 15.0f) + 10.0f); }
 Vector3 RayPlaneCollision( const Vector3& plane_pos, const Vector3& plane_normal, const Vector3& ray_origin, const Vector3& ray_dir );
 bool RayBoundingBoxCollision(const BoundingBox& box, const Vector3& ray_origin, const Vector3& ray_dir, Vector3& coll);
-bool BoundingBoxSphereOverlap(const BoundingBox& box, const Vector3& center, float radius);
+bool BoundingBoxSphereOverlap(const BoundingBox& box, const Vector3& center, float radius );
 Vector3 reflect(const Vector3& I, const Vector3& N);
 
 //value between 0 and 1

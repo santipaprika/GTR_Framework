@@ -242,7 +242,7 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 	//in case there is nothing to do
 	if (!mesh || !mesh->getNumVertices() || !material )
 		return;
-	assert(glGetError() == GL_NO_ERROR);
+    assert(glGetError() == GL_NO_ERROR);
 
 
 	//define locals to simplify coding

@@ -62,8 +62,9 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor
 
 	//Load lights (the constructor adds them automatically to the scene)
-	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(20, 200, 90), Vector3(0, -0.9, -0.1), GTR::SPOT);
-	GTR::Light* light2 = new GTR::Light(Color::GREEN, Vector3(0, 0, 0), Vector3(0.3, -0.5, 0.2), GTR::DIRECTIONAL);
+	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(20, 200, 90), Vector3(0, 0, 1), GTR::POINT);
+	//light1->intensity = 500;
+	GTR::Light* light2 = new GTR::Light(Color::GREEN, Vector3(120, 150, 0), Vector3(0.3, -0.5, 0.2), GTR::SPOT);
 	GTR::Light* light3 = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0), Vector3(0, -0.1, -0.8), GTR::DIRECTIONAL);
 
 	//Add lights into scene
@@ -79,14 +80,32 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	plane_node.material->name = "Road";
 	plane_node.material->tiles_number = 4.4;
 
+	//Create sphere
+	GTR::Node sphere = GTR::Node();
+	sphere.mesh = Mesh::Get("data/meshes/sphere.obj");
+	sphere.material = new GTR::Material();
+	sphere.material->color_texture = Texture::getWhiteTexture();
+	sphere.model.scale(5, 5, 5);
+
+
 	//Create prefabs
 	GTR::Prefab* plane_prefab = new GTR::Prefab();
 	plane_prefab->name = "Plane (road)";
 	plane_prefab->root = plane_node;
 
+	GTR::Prefab* sphere_prefab = new GTR::Prefab();
+	sphere_prefab->name = "Sphere (light)";
+	sphere_prefab->root = sphere;
+
+	light1->setVisiblePrefab(sphere_prefab);
+	light2->setVisiblePrefab(sphere_prefab);
+	light3->setVisiblePrefab(sphere_prefab);
+
 	GTR::Prefab* car = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
+	
 
 	//Add to prefabs list
+	//scene->AddEntity(new GTR::PrefabEntity(sphere_prefab, light1->model.getTranslation()));
 	scene->AddEntity(new GTR::PrefabEntity(plane_prefab));
 	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(0,0,0)));
 	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(200,0,60), Vector3(0,40,0)));
@@ -101,21 +120,10 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 //what to do when the image has to be draw
 void Application::render(void)
 {
-	std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneToTexture(GTR::Scene::instance);
-	renderer->renderSceneToViewport(GTR::Scene::instance, camera, bg_color);
+	std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(GTR::Scene::instance);
+	renderer->renderSceneToScreen(GTR::Scene::instance, camera, bg_color);
+	if (show_shadowmaps) renderer->showSceneShadowmaps(shadow_caster_lights);
 
-	for (int i = 0; i < shadow_caster_lights.size(); i++)
-	{
-		GTR::Light* light = shadow_caster_lights[i];
-		glDisable(GL_DEPTH_TEST);
-		Shader* shader = Shader::Get("depth");
-		shader->enable();
-		shader->setUniform("u_camera_nearfar", Vector2(light->camera->near_plane, light->camera->far_plane));
-		glViewport(i*200, 0, 200, 200);
-		if (light->light_type == GTR::DIRECTIONAL) light->shadow_fbo->depth_texture->toViewport();
-		else  if (light->light_type == GTR::SPOT) light->shadow_fbo->depth_texture->toViewport(shader);
-	}
-	
 	//the swap buffers is done in the main loop after this function
 }
 
@@ -130,6 +138,7 @@ void Application::renderDebugGUI(void)
 
 	ImGui::Checkbox("Wireframe", &render_wireframe);
 	ImGui::ColorEdit4("BG color", bg_color.v);
+	ImGui::Checkbox("Show Shadowmaps", &show_shadowmaps);
 
 	GTR::Scene* scene = GTR::Scene::instance;
 

@@ -252,6 +252,17 @@ uniform mat4 u_shadow_viewproj;
 uniform float u_shadow_bias;
 uniform bool u_cast_shadows;
 
+uniform mat4 u_shadowmap_viewproj_0;
+uniform mat4 u_shadowmap_viewproj_1;
+uniform mat4 u_shadowmap_viewproj_2;
+uniform mat4 u_shadowmap_viewproj_3;
+uniform mat4 u_shadowmap_viewproj_4;
+uniform mat4 u_shadowmap_viewproj_5;
+
+uniform int u_shadowmap_res;
+#define NUM_FACES 6
+uniform mat4 u_shadowmap_viewprojs[6];
+
 #include "getTextureUniforms"
 
 //this will store the color for the pixel shader
@@ -299,6 +310,50 @@ vec3 getAmbientColor(vec2 uv)
 	if (u_has_occlusion_texture)
 		ambient_color *= texture2D( u_occlusion_texture, uv * u_tiles_number).x;
 	return ambient_color;
+}
+
+float getShadowFactorPointLight()
+{
+	float shadow_factor = 1.0;
+	const float i_offset = 1.0 / 6.0;
+	for (int i = 0; i < 6; i++) {
+		
+		mat4 shadowmap_viewproj = mat4(1.0);
+		
+		switch (i) {
+			case 0: shadowmap_viewproj = u_shadowmap_viewproj_0; break;
+			case 1: shadowmap_viewproj = u_shadowmap_viewproj_1; break;
+			case 2: shadowmap_viewproj = u_shadowmap_viewproj_2; break;
+			case 3: shadowmap_viewproj = u_shadowmap_viewproj_3; break;
+			case 4: shadowmap_viewproj = u_shadowmap_viewproj_4; break;
+			case 5: shadowmap_viewproj = u_shadowmap_viewproj_5; break;
+		}
+		vec4 proj_pos = u_shadowmap_viewprojs[i] * vec4(v_world_position,1.0);
+		vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+		shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+		//it is outside on the sides, try next face
+		if(shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
+			continue;
+
+		shadow_uv.x *= i_offset;
+		shadow_uv.x += i_offset * float(i);
+		
+		float real_depth = (proj_pos.z - u_shadow_bias) / proj_pos.w;
+		real_depth = real_depth * 0.5 + 0.5;
+		
+		float shadow_depth = texture2D(u_shadowmap, shadow_uv).x;
+
+		if(real_depth < 0.0 || real_depth > 1.0)
+			shadow_factor = 0.0;
+		
+		if( shadow_depth < real_depth )
+			shadow_factor = 0.0;
+
+		break;
+	}
+	
+	return shadow_factor;
+	
 }
 
 float getShadowFactor(bool add_light_outside)
@@ -369,8 +424,11 @@ void main()
 		//light cannot be negative (but the dot product can)
 		NdotL = clamp( NdotL, 0.0, 1.0 );
 		
-		if (u_light_type == 1)	//point light
-			light += getPointLight(NdotL);
+		if (u_light_type == 1)	{//point light
+			vec3 point_light = getPointLight(NdotL);
+			if (u_cast_shadows) light += point_light * getShadowFactorPointLight();
+			else light += point_light;
+		}	
 		else	//spot light
 		{
 			vec3 D = normalize(u_light_direction);

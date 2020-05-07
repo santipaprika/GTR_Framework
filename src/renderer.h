@@ -17,10 +17,12 @@ namespace GTR {
 	public:
 
 		//to render the scene to viewport
-		void renderSceneToViewport(GTR::Scene* scene, Camera* camera, Vector4 bg_color);
+		void renderSceneToScreen(GTR::Scene* scene, Camera* camera, Vector4 bg_color);
 
 		//to render the scene to texture (shadowmap)
-		std::vector<Light*> renderSceneToTexture(GTR::Scene* scene);
+		std::vector<GTR::Light*> renderSceneShadowmaps(GTR::Scene* scene);
+
+		void showSceneShadowmaps(std::vector<Light*> shadow_caster_lights);
 
 		void setDefaultGLFlags();
 
@@ -35,6 +37,9 @@ namespace GTR {
 
 		//manages blendign
 		void manageBlendingAndCulling(GTR::Material* material, bool rendering_light, bool is_first_pass = true);
+
+		//render shadowmap
+		bool Renderer::renderShadowMap(Shader* &shader, Material* material, Camera* camera, Matrix44 model, Mesh* mesh);
 
 		//to render one mesh given its material and transformation matrix
 		void renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);

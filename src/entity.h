@@ -26,6 +26,11 @@ namespace GTR {
 	public:
 		Prefab* prefab;
 
+		//TO DO
+		/*bool receive_light = true;
+		bool cast_shadow = true;
+		Vector4 entity_color = Vector4(1, 1, 1, 1);*/
+
 		PrefabEntity(Prefab* prefab, Vector3 position = Vector3(0,0,0), Vector3 frontVector = Vector3(0,0,0), bool visible = true);
 		void renderInMenu();
 	};
@@ -36,18 +41,23 @@ namespace GTR {
 	public:
 		Vector3 color; //the color of the light
 		float intensity; //the amount of light emited
-		float max_distance = 100.0; //max distance of light effect
+		float max_distance = 500.0; //max distance of light effect
 		eLightType light_type; //if the light is OMNI, SPOT or DIRECTIONAL
 		Camera* camera;
 		float ortho_cam_size = 500;
 		FBO* shadow_fbo = NULL;
 		float shadow_bias = 0.01;
 		bool cast_shadows = true;
+		Matrix44 shadow_viewprojs[6];
 
 		float spot_cutoff_in_deg = 45;
 		float spot_exponent = 10;
 
+		PrefabEntity* lightSpherePrefab;
+
 		Light(Color color = Color(1, 1, 1, 1), Vector3 position = Vector3(0, 0, 0), Vector3 frontVector = Vector3(0,-0.9,0.1), eLightType light_type = POINT, float intensity = 1, bool visible = true);
+		void initializeLightCamera();
+		void setVisiblePrefab(Prefab* prefab);
 		void setUniforms(Shader* shader);
 		void renderInMenu();
 	};

@@ -39,7 +39,7 @@ void PrefabEntity::renderInMenu()
 	}
 }
 
-Light::Light(Color color, Vector3 position, Vector3 frontVector, eLightType light_type, float intensity, bool visible) : BaseEntity(position, Vector3(0,0,0), LIGHT, visible)
+Light::Light(Color color, Vector3 position, Vector3 frontVector, eLightType light_type, float intensity, bool visible) : BaseEntity(position, Vector3(0,0,1), LIGHT, visible)
 {
 	if (frontVector.length() == 0) frontVector = Vector3(0.1,-0.9,0.0);
 	model.setFrontAndOrthonormalize(frontVector);
@@ -48,24 +48,49 @@ Light::Light(Color color, Vector3 position, Vector3 frontVector, eLightType ligh
 	this->intensity = intensity;
 	this->light_type = light_type;
 
-	if (light_type == GTR::POINT)
-		cast_shadows = false;
+	
 
 	camera = new Camera();
-	//camera->setOrthographic(-100, 100, -100, 100, 0.1, 1000);
 	if (cast_shadows) {
 		shadow_fbo = new FBO();
-		shadow_fbo->create(4096, 4096);
-		if (light_type == GTR::SPOT) {
-			camera->lookAt(model.getTranslation(), model * Vector3(0, 0, 1), model.topVector());
-			camera->setPerspective((float)(2 * spot_cutoff_in_deg), 1.0f, 0.1f, 5000.f);
-		}
-		if (light_type == GTR::DIRECTIONAL) {
-			Vector3 cam_position = model.getTranslation() * Vector3(1, 0, 1) - model.frontVector() * max_distance;
-			camera->lookAt(cam_position, cam_position + model.frontVector(), model.topVector());
-			camera->setOrthographic(-ortho_cam_size, ortho_cam_size, -ortho_cam_size, ortho_cam_size, 0.1f, 5000.f);
-		}
+
+		if (light_type == POINT)
+			shadow_fbo->create(6 * 1024, 1024);
+		else
+			shadow_fbo->create(4096, 4096);
+
+		initializeLightCamera();
 	}
+}
+
+void Light::initializeLightCamera() {
+	
+	Vector3 cam_position = model.getTranslation();
+	switch (light_type)
+	{
+	case GTR::SPOT:
+		camera->lookAt(model.getTranslation(), cam_position + model.frontVector(), model.topVector());
+		camera->setPerspective((float)(2 * spot_cutoff_in_deg), 1.0f, 0.1f, 5000.f);
+		break;
+	case GTR::DIRECTIONAL:
+		max_distance = 500;
+		cam_position = model.getTranslation() * Vector3(1, 0, 1) - model.frontVector() * max_distance;
+		camera->lookAt(cam_position, cam_position + model.frontVector(), model.topVector());
+		camera->setOrthographic(-ortho_cam_size, ortho_cam_size, -ortho_cam_size, ortho_cam_size, 0.1f, 5000.f);
+		break;
+	case GTR::POINT:
+		camera->lookAt(model.getTranslation(), cam_position + Vector3(0,0,1), Vector3(0,1,0));
+		camera->setPerspective(90.0f, 1.0f, 0.1f, max_distance);
+		break;
+	}
+}
+
+void Light::setVisiblePrefab(Prefab* prefab)
+{
+	Vector3 light_pos = model.getTranslation();
+	lightSpherePrefab = new PrefabEntity(prefab);
+	lightSpherePrefab->model.setTranslation(light_pos.x, light_pos.y, light_pos.z);
+	Scene::instance->AddEntity(lightSpherePrefab);
 }
 
 void Light::setUniforms(Shader* shader)
@@ -80,6 +105,18 @@ void Light::setUniforms(Shader* shader)
 	shader->setUniform("u_light_spotExponent", spot_exponent);
 
 	if (!shadow_fbo) return;
+
+	if (light_type == GTR::POINT) {
+		shader->setUniform("u_shadowmap_res", shadow_fbo->width);
+		shader->setMatrix44Array("u_shadowmap_viewprojs", &shadow_viewprojs[0], 6);
+		
+		shader->setMatrix44("u_shadowmap_viewproj_0", shadow_viewprojs[0]);
+		shader->setMatrix44("u_shadowmap_viewproj_1", shadow_viewprojs[1]);
+		shader->setMatrix44("u_shadowmap_viewproj_2", shadow_viewprojs[2]);
+		shader->setMatrix44("u_shadowmap_viewproj_3", shadow_viewprojs[3]);
+		shader->setMatrix44("u_shadowmap_viewproj_4", shadow_viewprojs[4]);
+		shader->setMatrix44("u_shadowmap_viewproj_5", shadow_viewprojs[5]);
+	}
 
 	//get the depth texture from the FBO
 	Texture* shadowmap = shadow_fbo->depth_texture;
@@ -147,9 +184,13 @@ void Light::renderInMenu()
 		camera->lookAt(model.getTranslation(), model.getTranslation() + model.frontVector(), model.topVector());
 		break;
 	case GTR::POINT:
-		cast_shadows = false;
+		camera->far_plane = max_distance;
+		break;
 	}
-	ImGui::TreePop();
+
+	Vector3 light_pos = model.getTranslation();
+	lightSpherePrefab->model.setTranslation(light_pos.x, light_pos.y, light_pos.z);
+	lightSpherePrefab->prefab->root.material->color = Vector4(color, 1.0);
 }
 
 Scene* Scene::instance = nullptr;
@@ -185,9 +226,10 @@ void Scene::renderInMenu()
 			const char* node_name = "Light";
 			if (ImGui::TreeNode(light, node_name)) {
 				light->renderInMenu();
+				ImGui::TreePop();
 			}
 		}
+		ImGui::TreePop();
 	}
-	ImGui::TreePop();
 #endif
 }

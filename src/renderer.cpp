@@ -13,7 +13,7 @@
 using namespace GTR;
 
 //render all the scene to viewport
-void Renderer::renderSceneToViewport(GTR::Scene* scene, Camera* camera, Vector4 bg_color)
+void Renderer::renderSceneToScreen(GTR::Scene* scene, Camera* camera, Vector4 bg_color)
 {
 	Application* application = Application::instance;
 	application->rendering_shadowmap = false;
@@ -40,7 +40,7 @@ void Renderer::renderSceneToViewport(GTR::Scene* scene, Camera* camera, Vector4 
 		drawGrid();
 }
 
-std::vector<Light*> Renderer::renderSceneToTexture(GTR::Scene* scene) 
+std::vector<Light*> Renderer::renderSceneShadowmaps(GTR::Scene* scene)
 {
 	Application::instance->rendering_shadowmap = true;
 
@@ -51,23 +51,90 @@ std::vector<Light*> Renderer::renderSceneToTexture(GTR::Scene* scene)
 		if (!light->cast_shadows) continue;
 
 		light->shadow_fbo->bind();
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		//be sure no errors present in opengl before start
 		checkGLErrors();
 		setDefaultGLFlags();
 
 		Camera* light_cam = light->camera;
+		Vector3 light_center = light->model.getTranslation();
 		light_cam->enable();
 
-		renderScene(scene, light_cam);
+		if (light->light_type == GTR::POINT) {
+			int width = light->shadow_fbo->width / 6.0;
+			int height = light->shadow_fbo->height;
+			Vector3 directions[6] = { Vector3(-1,0,0), Vector3(1,0,0), Vector3(0,-1,0), Vector3(0,1,0), Vector3(0,0,-1), Vector3(0,0,1) };
+			for (int i = 0; i < 6; i++) {
+				Vector3 topVec = Vector3(0,1,0);
+				if (directions[i].y != 0)
+					topVec.set(0, 0, 1);
+				light_cam->lookAt(light_center, light_center + directions[i], topVec);
+				light->shadow_viewprojs[i] = light_cam->viewprojection_matrix;
+				
+				glViewport(width * i, 0, width, height);
+				light_cam->enable();
+				renderScene(scene, light_cam);
 
+			}
+
+			//Vector3 directions1[3] = { Vector3(0,1,0), Vector3(0,-1,0), Vector3(0,0,1) };
+
+			//for (int i = 0; i < 3; i++) {
+			//	Vector3 topVec = Vector3(0, 1, 0);
+			//	//if (directions[i].dot(Vector3(1, 1, 1)) < 0.0f) {
+			//		//if (directions[i].y != 0)
+			//		//	topVec.set(0, 0, 1);
+			//		//light_cam->lookAt(light_center, light_center + directions[i], topVec);
+			//	//}
+			//	//else {
+			//		//topVec = light->model.rotateVector(Vector3(0, 1, 0));
+			//	//if (directions[i].y != 0) topVec = -directions[i].y * light->model.frontVector();	//if looking below, top vec = model front. if looking above, top vec = model back
+			//	//}
+			//	if (directions1[i].y != 0)
+			//		topVec.set(0, 0, 1);
+			//	light_cam->lookAt(light_center, light_center + directions1[i], topVec);
+			//	light->shadow_viewprojs[i + 3] = light_cam->viewprojection_matrix;
+
+			//	glViewport(width * (i+3), 0, width, height);
+			//	light_cam->enable();
+			//	renderScene(scene, light_cam);
+			//}
+
+			glViewport(0, 0, Application::instance->window_width, Application::instance->window_height);
+		}
+		else
+			renderScene(scene, light_cam);
+		
 		light->shadow_fbo->unbind();
-
 		shadow_casting_lights.push_back(light);
 	}
 
 	return shadow_casting_lights;
 
+}
+
+void Renderer::showSceneShadowmaps(std::vector<Light*> shadow_caster_lights)
+{
+	for (int i = 0; i < shadow_caster_lights.size(); i++)
+	{
+		GTR::Light* light = shadow_caster_lights[i];
+		glDisable(GL_DEPTH_TEST);
+		Shader* shader = Shader::Get("depth");
+		shader->enable();
+		shader->setUniform("u_camera_nearfar", Vector2(light->camera->near_plane, light->camera->far_plane));
+		if (light->light_type == GTR::POINT)
+			glViewport(0, 200, 150 * 6, 150);
+		else
+			glViewport(i * 200, 0, 200, 200);
+
+		if (light->light_type == GTR::DIRECTIONAL) 
+			light->shadow_fbo->depth_texture->toViewport();
+		else  if (light->light_type == GTR::SPOT || light->light_type == GTR::POINT) 
+			light->shadow_fbo->depth_texture->toViewport(shader);
+
+		glViewport(0, 0, Application::instance->window_width, Application::instance->window_height);
+	}
 }
 
 void Renderer::setDefaultGLFlags() 
@@ -126,24 +193,19 @@ void Renderer::renderNode(const Matrix44& prefab_model, GTR::Node* node, Camera*
 		renderNode(prefab_model, node->children[i], camera);
 }
 
-
 void Renderer::manageBlendingAndCulling(GTR::Material* material, bool rendering_light, bool is_first_pass)
 {
 	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	if (material->alpha_mode != GTR::BLEND && (is_first_pass || !rendering_light))
+		glDisable(GL_BLEND);
 
 	//select the blending
-	if (material->alpha_mode == GTR::AlphaMode::BLEND)
+	if (!is_first_pass)
 	{
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	}
-	else {
-		if (!rendering_light || is_first_pass) {
-			glDisable(GL_BLEND);
-		}
-		else {
-			glDepthFunc(GL_LEQUAL);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-		}
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE); 
+		glDepthFunc(GL_LEQUAL);
 	}
 
 	//select if render both sides of the triangles
@@ -151,7 +213,27 @@ void Renderer::manageBlendingAndCulling(GTR::Material* material, bool rendering_
 		glDisable(GL_CULL_FACE);
 	else
 		glEnable(GL_CULL_FACE);
+	assert(glGetError() == GL_NO_ERROR);
+}
 
+bool Renderer::renderShadowMap(Shader* &shader, Material* material, Camera* camera, Matrix44 model, Mesh* mesh)
+{
+	shader = Shader::Get("flat");
+	assert(glGetError() == GL_NO_ERROR);
+
+	if (material->alpha_mode == GTR::BLEND)
+		return false;
+
+	shader->enable();
+	//manageBlendingAndCulling(material, false);
+
+
+	shader->setUniform("u_camera_pos", camera->eye);
+	shader->setUniform("u_model", model);
+	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+	mesh->render(GL_TRIANGLES);
+
+	return true;
 }
 
 //renders a mesh given its transform and material
@@ -160,6 +242,8 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 	//in case there is nothing to do
 	if (!mesh || !mesh->getNumVertices() || !material )
 		return;
+	assert(glGetError() == GL_NO_ERROR);
+
 
 	//define locals to simplify coding
 	Shader* shader = NULL;
@@ -168,31 +252,15 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 	std::vector<Light*> scene_lights = Scene::instance->lights;
 
 	if (Application::instance->rendering_shadowmap) {
-		shader = Shader::Get("flat");
-
-		if (material->alpha_mode == GTR::BLEND)
-			return;
-
-		shader->enable();
-		manageBlendingAndCulling(material, false);
-
-
-		shader->setUniform("u_camera_pos", camera->eye);
-		shader->setUniform("u_model", model);
-		shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
-		mesh->render(GL_TRIANGLES);
-		
+		if (!renderShadowMap(shader, material, camera, model, mesh)) return;
 	}
 	else {
 		texture = material->color_texture;
 
-		//chose a shader
-		if (texture) {
-			if (!scene_lights.empty())	shader = Shader::Get("phong");
-			else shader = Shader::Get("texture");
-		}
-		else
-			shader = Shader::Get("flat");
+		if (!texture) texture = Texture::getWhiteTexture();
+
+		shader = scene_lights.empty() ? Shader::Get("texture") : Shader::Get("phong");
+		assert(glGetError() == GL_NO_ERROR);
 
 		//no shader? then nothing to render
 		if (!shader)

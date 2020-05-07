@@ -30,6 +30,7 @@ public:
 	bool render_gui;
 	
 	bool rendering_shadowmap;
+	bool show_shadowmaps = false;
 
 	//some vars
 	bool mouse_locked; //tells if the mouse is locked (blocked in the center and not visible)

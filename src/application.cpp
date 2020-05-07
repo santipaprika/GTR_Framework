@@ -23,7 +23,6 @@ GTR::Renderer* renderer = nullptr;
 FBO* fbo = nullptr;
 
 Vector4 bg_color(0.5, 0.5, 0.5, 1.0);
-GTR::Renderer* renderer;
 float cam_speed = 10;
 
 Application::Application(int window_width, int window_height, SDL_Window* window)
@@ -217,6 +216,7 @@ void Application::update(double seconds_elapsed)
 
 void Application::renderDebugGizmo()
 {
+	/*
 	if (!prefab)
 		return;
 
@@ -281,6 +281,7 @@ void Application::renderDebugGizmo()
 	ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
 	ImGuizmo::Manipulate(camera->view_matrix.m, camera->projection_matrix.m, mCurrentGizmoOperation, mCurrentGizmoMode, matrix.m, NULL, useSnap ? &snap.x : NULL);
 	#endif
+	*/
 }
 
 

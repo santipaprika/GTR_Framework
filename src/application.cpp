@@ -18,7 +18,7 @@
 
 Application* Application::instance = nullptr;
 Camera* camera = nullptr;
-GTR::Prefab* prefab_car = nullptr;
+GTR::BaseEntity* selectedEntity = nullptr;
 GTR::Renderer* renderer = nullptr;
 FBO* fbo = nullptr;
 
@@ -36,9 +36,6 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	render_gui = true;
 
 	render_wireframe = false;
-
-	//initialize scene
-	GTR::Scene* scene = new GTR::Scene();
 
 	fps = 0;
 	frame = 0;
@@ -60,57 +57,74 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	//This class will be the one in charge of rendering all 
 	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor
 
+	createScene();
+
+	//hide the cursor
+	SDL_ShowCursor(!mouse_locked); //hide or show the mouse
+}
+
+void Application::createScene()
+{
+	//initialize scene
+	GTR::Scene* scene = new GTR::Scene();
+
 	//Load lights (the constructor adds them automatically to the scene)
-	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(20, 200, 90), Vector3(0, 0, 1), GTR::POINT);
+	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(-1280, 380, 510), Vector3(0, 0, 1), GTR::POINT);
+	light1->max_distance = 1500;
+	light1->updateLightCamera();
 	//light1->intensity = 500;
-	GTR::Light* light2 = new GTR::Light(Color::GREEN, Vector3(120, 150, 0), Vector3(0.3, -0.5, 0.2), GTR::SPOT);
+	GTR::Light* light2 = new GTR::Light(Color::GREEN, Vector3(120, 830, -120), Vector3(0.4, -0.85, 0.34), GTR::SPOT);
+	light2->setCutoffAngle(65.0);
+
 	GTR::Light* light3 = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0), Vector3(0, -0.1, -0.8), GTR::DIRECTIONAL);
+	light3->max_distance = 1500;
+	light3->ortho_cam_size = 2000;
+	light3->updateLightCamera();
+
+	GTR::Light* light4 = new GTR::Light(Color::TURQUESE, Vector3(1520, 330, -175), Vector3(-0.23, -0.5, 0.8), GTR::SPOT);
+	light4->setCutoffAngle(22.0);
 
 	//Add lights into scene
+	scene->AddEntity(light3);
 	scene->AddEntity(light1);
 	scene->AddEntity(light2);
-	scene->AddEntity(light3);
+	scene->AddEntity(light4);
 
 	//Create plane
 	GTR::Node plane_node = GTR::Node();
 	plane_node.mesh = new Mesh();
 	plane_node.mesh->createPlane(2048.0);
-	plane_node.material = new GTR::Material(Texture::Get("data/textures/road.tga"));
+	plane_node.material = new GTR::Material(Texture::Get("data/textures/asphalt.png"));
 	plane_node.material->name = "Road";
 	plane_node.material->tiles_number = 4.4;
 
-	//Create sphere
-	GTR::Node sphere = GTR::Node();
-	sphere.mesh = Mesh::Get("data/meshes/sphere.obj");
-	sphere.material = new GTR::Material();
-	sphere.material->color_texture = Texture::getWhiteTexture();
-	sphere.model.scale(5, 5, 5);
-
-
 	//Create prefabs
 	GTR::Prefab* plane_prefab = new GTR::Prefab();
-	plane_prefab->name = "Plane (road)";
+	plane_prefab->name = "Floor";
 	plane_prefab->root = plane_node;
 
-	GTR::Prefab* sphere_prefab = new GTR::Prefab();
-	sphere_prefab->name = "Sphere (light)";
-	sphere_prefab->root = sphere;
-
-	light1->setVisiblePrefab(sphere_prefab);
-	light2->setVisiblePrefab(sphere_prefab);
-	light3->setVisiblePrefab(sphere_prefab);
-
 	GTR::Prefab* car = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
-	
+	GTR::Prefab* lamp = GTR::Prefab::Get("data/prefabs/lamp/scene.gltf");
+	lamp->root.model.scale(50, 50, 50);
+	GTR::Prefab* house = GTR::Prefab::Get("data/prefabs/house/scene.gltf");
+	house->root.model.scale(0.35, 0.35, 0.35);
+
 
 	//Add to prefabs list
 	//scene->AddEntity(new GTR::PrefabEntity(sphere_prefab, light1->model.getTranslation()));
 	scene->AddEntity(new GTR::PrefabEntity(plane_prefab));
-	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(0,0,0)));
-	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(200,0,60), Vector3(0,40,0)));
+	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(0, 0, 0)));
+	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(200, 0, 60), Vector3(0, 40, 0)));
+	scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(150, 0, 200), Vector3(0, 90, 0)));
+	scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(0, 0, 200), Vector3(0, 0, 0)));
+	scene->AddEntity(new GTR::PrefabEntity(house, Vector3(250, 0, 100)));
 
-	//hide the cursor
-	SDL_ShowCursor(!mouse_locked); //hide or show the mouse
+	for (int i = 0; i < 5; i++) {
+		for (int j = 0; j < 5; j++) {
+			scene->AddEntity(new GTR::PrefabEntity(car, Vector3(1000 + i * 150, 0, j * 300)));
+			scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(-1000 - i * 200 + random(50, -25), 0, j * 200 + random(50, -25)), Vector3(0, 60 * (i + j), 0)));
+		}
+	}
 }
 
 //what to do when the image has to be draw
@@ -216,12 +230,11 @@ void Application::update(double seconds_elapsed)
 
 void Application::renderDebugGizmo()
 {
-	/*
-	if (!prefab)
+	if (!selectedEntity)
 		return;
 
 	//example of matrix we want to edit, change this to the matrix of your entity
-	Matrix44& matrix = prefab->root.model;
+	Matrix44& matrix = selectedEntity->model;
 
 	#ifndef SKIP_IMGUI
 
@@ -280,8 +293,14 @@ void Application::renderDebugGizmo()
 	ImGuiIO& io = ImGui::GetIO();
 	ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
 	ImGuizmo::Manipulate(camera->view_matrix.m, camera->projection_matrix.m, mCurrentGizmoOperation, mCurrentGizmoMode, matrix.m, NULL, useSnap ? &snap.x : NULL);
+	
+	if (selectedEntity->type == GTR::LIGHT) {
+		GTR::Light* light = ((GTR::Light*)selectedEntity);
+		light->lightSpherePrefab->model = selectedEntity->model;
+		light->lightSpherePrefab->prefab->root.material->color = Vector4(light->color, 1.0);
+		light->updateLightCamera();
+	}
 	#endif
-	*/
 }
 
 
@@ -295,6 +314,7 @@ void Application::onKeyDown( SDL_KeyboardEvent event )
 		case SDLK_F1: render_debug = !render_debug; break;
 		case SDLK_F2: render_grid = !render_grid; break;
 		case SDLK_f: camera->center.set(0, 0, 0); camera->updateViewMatrix(); break;
+		case SDLK_SPACE: selectedEntity = NULL;
 		case SDLK_F5: Shader::ReloadAll(); break;
 	}
 }
@@ -313,6 +333,7 @@ void Application::onGamepadButtonUp(SDL_JoyButtonEvent event)
 
 }
 
+float down_time;
 void Application::onMouseButtonDown( SDL_MouseButtonEvent event )
 {
 	if (event.button == SDL_BUTTON_MIDDLE) //middle mouse
@@ -321,10 +342,33 @@ void Application::onMouseButtonDown( SDL_MouseButtonEvent event )
 		mouse_locked = !mouse_locked;
 		SDL_ShowCursor(!mouse_locked);
 	}
+
+	if (event.button == SDL_BUTTON_LEFT)
+		down_time = time;
 }
 
 void Application::onMouseButtonUp(SDL_MouseButtonEvent event)
 {
+	if (event.button == SDL_BUTTON_LEFT && (time - down_time) < 0.1)
+	{
+		for (auto lightEnt : GTR::Scene::instance->lights)
+		{
+			GTR::PrefabEntity* lightPrefab = lightEnt->lightSpherePrefab;
+			if (lightPrefab->clickOnIt(camera)) {
+				selectedEntity = lightEnt;
+				return;
+			}
+		}
+
+		for (auto prefabEnt : GTR::Scene::instance->prefabs)
+		{
+			if (prefabEnt->clickOnIt(camera)) {
+				selectedEntity = prefabEnt;
+				if (!(((GTR::PrefabEntity*)selectedEntity)->prefab->name == "Floor"))
+				break;
+			}
+		}
+	}
 }
 
 void Application::onMouseWheel(SDL_MouseWheelEvent event)

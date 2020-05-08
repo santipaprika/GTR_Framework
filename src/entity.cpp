@@ -1,14 +1,16 @@
 
 #include "entity.h"
 #include "application.h"
+#include "input.h"
+
 #include <cassert>
 
 using namespace GTR;
 
-BaseEntity::BaseEntity(Vector3 position, Vector3 frontVector, eType type, bool visible)
+BaseEntity::BaseEntity(Vector3 position, Vector3 rotation, eType type, bool visible)
 {
 	model = Matrix44::IDENTITY;
-	Vector3 eulerAnglesRad = frontVector * (PI / 180.0);
+	Vector3 eulerAnglesRad = rotation * (PI / 180.0);
 
 	model.rotate(eulerAnglesRad.x, model.frontVector());
 	model.rotate(eulerAnglesRad.y, model.topVector());
@@ -19,7 +21,7 @@ BaseEntity::BaseEntity(Vector3 position, Vector3 frontVector, eType type, bool v
 	this->visible = visible;
 }
 
-PrefabEntity::PrefabEntity(Prefab* prefab, Vector3 position, Vector3 frontVector, bool visible) : BaseEntity(position, frontVector, PREFAB, visible)
+PrefabEntity::PrefabEntity(Prefab* prefab, Vector3 position, Vector3 rotation, bool visible) : BaseEntity(position, rotation, PREFAB, visible)
 {
 	this->prefab = prefab;
 }
@@ -39,6 +41,33 @@ void PrefabEntity::renderInMenu()
 	}
 }
 
+bool PrefabEntity::clickOnIt(Camera* camera, Node* node)
+{
+
+	if (!node) node = &prefab->root;
+
+	if (node->mesh)
+	{
+		//compute the bounding box of the object in world space (by using the mesh bounding box transformed to world space)
+		BoundingBox world_bounding = transformBoundingBox(model, node->mesh->box);
+
+		//if bounding box is inside the camera frustum then the object is probably visible
+		if (camera->testBoxInFrustum(world_bounding.center, world_bounding.halfsize))
+		{
+			Vector3 cam_dir = camera->getRayDirection(Input::mouse_position.x, Input::mouse_position.y, Application::instance->window_width, Application::instance->window_height);
+			Vector3 colision;
+			if (RayBoundingBoxCollision(world_bounding, camera->eye, cam_dir, colision))
+				return true;
+		}
+	}
+
+	//iterate recursively with children
+	for (int i = 0; i < node->children.size(); ++i)
+		if (clickOnIt(camera, node->children[i])) return true;
+	
+	return false;
+}
+
 Light::Light(Color color, Vector3 position, Vector3 frontVector, eLightType light_type, float intensity, bool visible) : BaseEntity(position, Vector3(0,0,1), LIGHT, visible)
 {
 	if (frontVector.length() == 0) frontVector = Vector3(0.1,-0.9,0.0);
@@ -48,7 +77,9 @@ Light::Light(Color color, Vector3 position, Vector3 frontVector, eLightType ligh
 	this->intensity = intensity;
 	this->light_type = light_type;
 
-	
+	setVisiblePrefab();
+
+	lightSpherePrefab->prefab->root.material->color = color.toVector4();
 
 	camera = new Camera();
 	if (cast_shadows) {
@@ -85,11 +116,29 @@ void Light::initializeLightCamera() {
 	}
 }
 
-void Light::setVisiblePrefab(Prefab* prefab)
+void Light::setCutoffAngle(float angle_in_deg)
 {
+	spot_cutoff_in_deg = angle_in_deg;
+	camera->setPerspective(2 * spot_cutoff_in_deg, 1, camera->near_plane, camera->far_plane);
+}
+
+void Light::setVisiblePrefab()
+{
+	//Create sphere
+	GTR::Node sphere = GTR::Node();
+	sphere.mesh = Mesh::Get("data/meshes/sphere.obj");
+	sphere.material = new GTR::Material();
+	sphere.material->color_texture = Texture::getWhiteTexture();
+	sphere.model.scale(5, 5, 5);
+
+	GTR::Prefab* sphere_prefab = new GTR::Prefab();
+	sphere_prefab->name = "Sphere (light)";
+	sphere_prefab->root = sphere;
+
 	Vector3 light_pos = model.getTranslation();
-	lightSpherePrefab = new PrefabEntity(prefab);
+	lightSpherePrefab = new PrefabEntity(sphere_prefab);
 	lightSpherePrefab->model.setTranslation(light_pos.x, light_pos.y, light_pos.z);
+
 	Scene::instance->AddEntity(lightSpherePrefab);
 }
 
@@ -109,13 +158,6 @@ void Light::setUniforms(Shader* shader)
 	if (light_type == GTR::POINT) {
 		shader->setUniform("u_shadowmap_res", shadow_fbo->width);
 		shader->setMatrix44Array("u_shadowmap_viewprojs", &shadow_viewprojs[0], 6);
-		
-		shader->setMatrix44("u_shadowmap_viewproj_0", shadow_viewprojs[0]);
-		shader->setMatrix44("u_shadowmap_viewproj_1", shadow_viewprojs[1]);
-		shader->setMatrix44("u_shadowmap_viewproj_2", shadow_viewprojs[2]);
-		shader->setMatrix44("u_shadowmap_viewproj_3", shadow_viewprojs[3]);
-		shader->setMatrix44("u_shadowmap_viewproj_4", shadow_viewprojs[4]);
-		shader->setMatrix44("u_shadowmap_viewproj_5", shadow_viewprojs[5]);
 	}
 
 	//get the depth texture from the FBO
@@ -138,7 +180,8 @@ void Light::renderInMenu()
 {
 	bool light_type_changed = false;
 	ImGui::ColorEdit3("Light Color", (float*)&color);
-	light_type_changed = ImGui::Combo("Light Type", (int*)&light_type, "DIRECTIONAL\0POINT\0SPOT", 3);
+	if (ImGui::Combo("Light Type", (int*)&light_type, "DIRECTIONAL\0POINT\0SPOT", 3))
+		updateLightCamera(true);
 	float matrixTranslation[3], matrixRotation[3], matrixScale[3];
 	Vector3 frontVector = model.frontVector();
 	ImGuizmo::DecomposeMatrixToComponents(model.m, matrixTranslation, matrixRotation, matrixScale);
@@ -148,28 +191,33 @@ void Light::renderInMenu()
 	ImGui::SliderFloat("Far", (float*)&camera->far_plane, camera->near_plane, 10000.0f);
 	ImGui::DragFloat("Shadow Bias", (float*)&shadow_bias, 0.001f);
 	ImGui::Checkbox("Cast Shadows", &cast_shadows);
-	ImGui::SliderFloat("Max Distance", (float*)&max_distance, 0, 1000);
+	ImGui::SliderFloat("Max Distance", (float*)&max_distance, 0, 2500);
+	ImGui::SliderFloat("Intensity", (float*)&intensity, 0, 100);
+
 	switch (light_type)
 	{
 	case GTR::DIRECTIONAL:
-		ImGui::SliderFloat("Intensity", (float*)&intensity, 0, 100);
-		ImGui::SliderFloat("Camera Size", (float*)&ortho_cam_size, 0.1, 1000);
+		ImGui::SliderFloat("Camera Size", (float*)&ortho_cam_size, 0.1, 2000);
 		ImGui::SliderFloat3("Direction", (float*)&frontVector[0], -1, 1);
-		break;
-	case GTR::POINT:
-		ImGui::SliderFloat("Intensity", (float*)&intensity, 0, 100);
 		break;
 	case GTR::SPOT:
-		ImGui::SliderFloat("Intensity", (float*)&intensity, 0, 100);
 		ImGui::SliderFloat3("Direction", (float*)&frontVector[0], -1, 1);
-		ImGui::SliderFloat("Cosine Cutoff", (float*)&spot_cutoff_in_deg, 0, 90);
+		ImGui::SliderFloat("Cutoff Angle", (float*)&spot_cutoff_in_deg, 0, 90);
 		ImGui::SliderFloat("Spot Exponent", (float*)&spot_exponent, 0, 100);
 		ImGui::SliderFloat("FOV", (float*)&camera->fov, 0.0f, 180.0f);
+		break;
 	}
 
 	if (frontVector.length() == 0) frontVector = Vector3(0.1, -0.9, 0.0);
 	ImGuizmo::RecomposeMatrixFromComponents(matrixTranslation, matrixRotation, matrixScale, model.m);
 	model.setFrontAndOrthonormalize(frontVector);
+	lightSpherePrefab->prefab->root.material->color = Vector4(color, 1);
+	updateLightCamera();
+
+}
+
+void Light::updateLightCamera(bool type_changed)
+{
 	switch (light_type) {
 	case GTR::DIRECTIONAL:
 	{
@@ -179,18 +227,16 @@ void Light::renderInMenu()
 		break;
 	}
 	case GTR::SPOT:
-		if (ImGui::Button("Update FOV") || light_type_changed)
+		if (ImGui::Button("Update FOV") || type_changed)
 			camera->setPerspective(2 * spot_cutoff_in_deg, 1, camera->near_plane, camera->far_plane);
 		camera->lookAt(model.getTranslation(), model.getTranslation() + model.frontVector(), model.topVector());
 		break;
 	case GTR::POINT:
+		camera->lookAt(model.getTranslation(), model.getTranslation() + Vector3(0, 0, 1), Vector3(0, 1, 0));
+		camera->setPerspective(90.0f, 1.0f, 0.1f, max_distance);
 		camera->far_plane = max_distance;
 		break;
 	}
-
-	Vector3 light_pos = model.getTranslation();
-	lightSpherePrefab->model.setTranslation(light_pos.x, light_pos.y, light_pos.z);
-	lightSpherePrefab->prefab->root.material->color = Vector4(color, 1.0);
 }
 
 Scene* Scene::instance = nullptr;
@@ -223,7 +269,13 @@ void Scene::renderInMenu()
 	if (ImGui::TreeNode("Lights")) {
 		int curr_light_idx = 0;
 		for (auto light : lights) {
-			const char* node_name = "Light";
+			const char* node_name;
+			switch (light->light_type)
+			{
+			case POINT: node_name = "Point light"; break;
+			case SPOT: node_name = "Spot light"; break;
+			case DIRECTIONAL: node_name = "Directional light"; break;
+			}
 			if (ImGui::TreeNode(light, node_name)) {
 				light->renderInMenu();
 				ImGui::TreePop();

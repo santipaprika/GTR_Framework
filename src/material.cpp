@@ -47,6 +47,7 @@ void Material::renderInMenu()
 {
 	#ifndef SKIP_IMGUI
 	ImGui::Text("Name: %s", name.c_str()); // Show String
+	ImGui::SliderFloat("Tile Number", &tiles_number, 0.1, 100);
 	ImGui::Checkbox("Two sided", &two_sided);
 	ImGui::Combo("AlphaMode", (int*)&alpha_mode,"NO_ALPHA\0MASK\0BLEND",3);
 	ImGui::SliderFloat("Alpha Cutoff", &alpha_cutoff, 0.0f, 1.0f);

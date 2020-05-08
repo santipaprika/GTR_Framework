@@ -21,6 +21,8 @@ namespace GTR {
 
 		//to render the scene to texture (shadowmap)
 		std::vector<GTR::Light*> renderSceneShadowmaps(GTR::Scene* scene);
+		
+		void renderPointShadowmap(Light* light);
 
 		void showSceneShadowmaps(std::vector<Light*> shadow_caster_lights);
 

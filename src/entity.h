@@ -6,6 +6,7 @@
 #include "shader.h"
 #include "camera.h"
 #include "fbo.h"
+#include "mesh.h"
 
 namespace GTR {
 
@@ -18,7 +19,7 @@ namespace GTR {
 		bool visible; //says if the object must be rendered
 		eType type; //tells us the type of this entity from a list of possible types
 
-		BaseEntity(Vector3 position = Vector3(0, 0, 0), Vector3 frontVector = Vector3(0, 0, 0), eType type = BASE_NODE, bool visible = true);
+		BaseEntity(Vector3 position = Vector3(0, 0, 0), Vector3 rotation = Vector3(0, 0, 0), eType type = BASE_NODE, bool visible = true);
 	};
 
 	class PrefabEntity : public BaseEntity
@@ -31,8 +32,9 @@ namespace GTR {
 		bool cast_shadow = true;
 		Vector4 entity_color = Vector4(1, 1, 1, 1);*/
 
-		PrefabEntity(Prefab* prefab, Vector3 position = Vector3(0,0,0), Vector3 frontVector = Vector3(0,0,0), bool visible = true);
+		PrefabEntity(Prefab* prefab, Vector3 position = Vector3(0,0,0), Vector3 rotation = Vector3(0,0,0), bool visible = true);
 		void renderInMenu();
+		bool clickOnIt(Camera* camera, Node* node = NULL);
 	};
 
 	enum eLightType { DIRECTIONAL, POINT, SPOT };
@@ -44,9 +46,9 @@ namespace GTR {
 		float max_distance = 500.0; //max distance of light effect
 		eLightType light_type; //if the light is OMNI, SPOT or DIRECTIONAL
 		Camera* camera;
-		float ortho_cam_size = 500;
+		float ortho_cam_size = 800;
 		FBO* shadow_fbo = NULL;
-		float shadow_bias = 0.01;
+		float shadow_bias = 0.001;
 		bool cast_shadows = true;
 		Matrix44 shadow_viewprojs[6];
 
@@ -57,8 +59,10 @@ namespace GTR {
 
 		Light(Color color = Color(1, 1, 1, 1), Vector3 position = Vector3(0, 0, 0), Vector3 frontVector = Vector3(0,-0.9,0.1), eLightType light_type = POINT, float intensity = 1, bool visible = true);
 		void initializeLightCamera();
-		void setVisiblePrefab(Prefab* prefab);
+		void setVisiblePrefab();
 		void setUniforms(Shader* shader);
+		void updateLightCamera(bool type_changed = false);
+		void setCutoffAngle(float angle_in_rad);
 		void renderInMenu();
 	};
 

@@ -36,7 +36,7 @@ void Renderer::renderSceneToScreen(GTR::Scene* scene, Camera* camera, Vector4 bg
 
 	renderScene(scene, camera);
 
-	if (application->render_debug)
+	if (application->render_grid)
 		drawGrid();
 }
 
@@ -47,6 +47,7 @@ std::vector<Light*> Renderer::renderSceneShadowmaps(GTR::Scene* scene)
 	std::vector<Light*> shadow_casting_lights;
 
 	//find lights that cast shadow (forced to spot atm)
+
 	for (auto light : GTR::Scene::instance->lights) {
 		if (!light->cast_shadows) continue;
 
@@ -61,48 +62,8 @@ std::vector<Light*> Renderer::renderSceneShadowmaps(GTR::Scene* scene)
 		Vector3 light_center = light->model.getTranslation();
 		light_cam->enable();
 
-		if (light->light_type == GTR::POINT) {
-			int width = light->shadow_fbo->width / 6.0;
-			int height = light->shadow_fbo->height;
-			Vector3 directions[6] = { Vector3(-1,0,0), Vector3(1,0,0), Vector3(0,-1,0), Vector3(0,1,0), Vector3(0,0,-1), Vector3(0,0,1) };
-			for (int i = 0; i < 6; i++) {
-				Vector3 topVec = Vector3(0,1,0);
-				if (directions[i].y != 0)
-					topVec.set(0, 0, 1);
-				light_cam->lookAt(light_center, light_center + directions[i], topVec);
-				light->shadow_viewprojs[i] = light_cam->viewprojection_matrix;
-				
-				glViewport(width * i, 0, width, height);
-				light_cam->enable();
-				renderScene(scene, light_cam);
-
-			}
-
-			//Vector3 directions1[3] = { Vector3(0,1,0), Vector3(0,-1,0), Vector3(0,0,1) };
-
-			//for (int i = 0; i < 3; i++) {
-			//	Vector3 topVec = Vector3(0, 1, 0);
-			//	//if (directions[i].dot(Vector3(1, 1, 1)) < 0.0f) {
-			//		//if (directions[i].y != 0)
-			//		//	topVec.set(0, 0, 1);
-			//		//light_cam->lookAt(light_center, light_center + directions[i], topVec);
-			//	//}
-			//	//else {
-			//		//topVec = light->model.rotateVector(Vector3(0, 1, 0));
-			//	//if (directions[i].y != 0) topVec = -directions[i].y * light->model.frontVector();	//if looking below, top vec = model front. if looking above, top vec = model back
-			//	//}
-			//	if (directions1[i].y != 0)
-			//		topVec.set(0, 0, 1);
-			//	light_cam->lookAt(light_center, light_center + directions1[i], topVec);
-			//	light->shadow_viewprojs[i + 3] = light_cam->viewprojection_matrix;
-
-			//	glViewport(width * (i+3), 0, width, height);
-			//	light_cam->enable();
-			//	renderScene(scene, light_cam);
-			//}
-
-			glViewport(0, 0, Application::instance->window_width, Application::instance->window_height);
-		}
+		if (light->light_type == GTR::POINT)
+			renderPointShadowmap(light);
 		else
 			renderScene(scene, light_cam);
 		
@@ -111,11 +72,33 @@ std::vector<Light*> Renderer::renderSceneShadowmaps(GTR::Scene* scene)
 	}
 
 	return shadow_casting_lights;
+}
 
+void Renderer::renderPointShadowmap(Light* light)
+{
+	Camera* light_cam = light->camera;
+	Vector3 light_center = light->model.getTranslation();
+
+	int width = light->shadow_fbo->width / 6.0;
+	int height = light->shadow_fbo->height;
+	Vector3 directions[6] = { Vector3(-1,0,0), Vector3(1,0,0), Vector3(0,-1,0), Vector3(0,1,0), Vector3(0,0,-1), Vector3(0,0,1) };
+	for (int i = 0; i < 6; i++) {
+		Vector3 topVec = Vector3(0, 1, 0);
+		if (directions[i].y != 0)
+			topVec.set(0, 0, 1);
+		light_cam->lookAt(light_center, light_center + directions[i], topVec);
+		light->shadow_viewprojs[i] = light_cam->viewprojection_matrix;
+
+		glViewport(width * i, 0, width, height);
+		light_cam->enable();
+		renderScene(GTR::Scene::instance, light_cam);
+	}
+	glViewport(0, 0, Application::instance->window_width, Application::instance->window_height);
 }
 
 void Renderer::showSceneShadowmaps(std::vector<Light*> shadow_caster_lights)
 {
+	int num_points = 0;
 	for (int i = 0; i < shadow_caster_lights.size(); i++)
 	{
 		GTR::Light* light = shadow_caster_lights[i];
@@ -123,14 +106,16 @@ void Renderer::showSceneShadowmaps(std::vector<Light*> shadow_caster_lights)
 		Shader* shader = Shader::Get("depth");
 		shader->enable();
 		shader->setUniform("u_camera_nearfar", Vector2(light->camera->near_plane, light->camera->far_plane));
-		if (light->light_type == GTR::POINT)
-			glViewport(0, 200, 150 * 6, 150);
+		if (light->light_type == GTR::POINT) {
+			glViewport(0, 200 + 150 * num_points, 150 * 6, 150);
+			num_points++;
+		}
 		else
 			glViewport(i * 200, 0, 200, 200);
 
-		if (light->light_type == GTR::DIRECTIONAL) 
+		if (light->light_type == GTR::DIRECTIONAL)	// ortographic
 			light->shadow_fbo->depth_texture->toViewport();
-		else  if (light->light_type == GTR::SPOT || light->light_type == GTR::POINT) 
+		else
 			light->shadow_fbo->depth_texture->toViewport(shader);
 
 		glViewport(0, 0, Application::instance->window_width, Application::instance->window_height);
@@ -151,9 +136,9 @@ void Renderer::setDefaultGLFlags()
 //render all the scene
 void Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 {
-	for (auto prefab : scene->prefabs)
+	for (auto prefabEnt : scene->prefabs)
 	{
-		renderPrefab(prefab->model, prefab->prefab, camera);
+		renderPrefab(prefabEnt->model, prefabEnt->prefab, camera);
 	}
 }
 
@@ -225,8 +210,6 @@ bool Renderer::renderShadowMap(Shader* &shader, Material* material, Camera* came
 		return false;
 
 	shader->enable();
-	//manageBlendingAndCulling(material, false);
-
 
 	shader->setUniform("u_camera_pos", camera->eye);
 	shader->setUniform("u_model", model);
@@ -280,6 +263,9 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 				if (!mesh->testSphereCollision(model, light->model.getTranslation(), light->max_distance, Vector3(0, 0, 0), Vector3(0, 0, 0)) && light->light_type == GTR::POINT && !is_first_pass)
 					continue;
 
+				if (!light->camera->testBoxInFrustum(mesh->box.center, mesh->box.halfsize) && light->light_type == GTR::SPOT && !is_first_pass)
+					continue;
+
 				manageBlendingAndCulling(material, true, is_first_pass);
 
 				light->setUniforms(shader);	//DO BEFORE MATERIAL SET UNIFORMS
@@ -288,6 +274,7 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 				shader->setUniform("u_ambient_light", Scene::instance->ambientLight * is_first_pass);
 				shader->setUniform("u_is_first_pass", is_first_pass);
 				shader->setUniform("u_model", model);
+				
 				//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
 				shader->setUniform("u_alpha_cutoff", material->alpha_mode == GTR::AlphaMode::MASK ? material->alpha_cutoff : 0);
 
@@ -296,7 +283,7 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 				is_first_pass = false;
 			}
 		}
-		else {
+		else {	//NO LIGHTS
 			manageBlendingAndCulling(material, false);
 
 			shader->setUniform("u_model", model);

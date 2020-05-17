@@ -23,25 +23,32 @@ void Material::registerMaterial(const char* name)
 	sMaterials[name] = this;
 }
 
-void Material::setUniforms(Shader* shader) {
-	shader->setUniform("u_has_occlusion_texture", false);
-	shader->setUniform("u_has_emissive_texture", false);
+void Material::setUniforms(Shader* shader, bool is_first_pass) {
+	
+	Texture* black_tex = Texture::getBlackTexture();
+	Texture* white_tex = Texture::getWhiteTexture();
 
-	if (color_texture)
+	if (!color_texture)
+		shader->setUniform("u_texture", white_tex, 1);
+	else
 		shader->setUniform("u_texture", color_texture, 1);
 
-	if (emissive_texture) {
+	if (!emissive_texture || !is_first_pass)
+		shader->setUniform("u_emissive_texture", black_tex, 2);
+	else
 		shader->setUniform("u_emissive_texture", emissive_texture, 2);
-		shader->setUniform("u_has_emissive_texture", true);
-	}
 
-	if (occlusion_texture) {
+	if (!occlusion_texture || !is_first_pass)
+		shader->setUniform("u_occlusion_texture", white_tex, 3);
+	else
 		shader->setUniform("u_occlusion_texture", occlusion_texture, 3);
-		shader->setUniform("u_has_occlusion_texture", true);
-	}
 
 	shader->setUniform("u_color", color);
 	shader->setUniform("u_tiles_number", tiles_number);
+
+	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
+	shader->setUniform("u_alpha_cutoff", alpha_mode == GTR::AlphaMode::MASK ? alpha_cutoff : 0);
+
 }
 void Material::renderInMenu()
 {

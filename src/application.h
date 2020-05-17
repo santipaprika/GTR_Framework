@@ -8,6 +8,7 @@
 #include "includes.h"
 #include "camera.h"
 #include "utils.h"
+#include "BaseEntity.h"
 
 class Application
 {
@@ -31,6 +32,11 @@ public:
 	
 	bool rendering_shadowmap;
 	bool show_shadowmaps = false;
+
+	GTR::Light* light_selected;
+	GTR::PrefabEntity* prefab_selected;
+
+	Camera* camera;
 
 	//some vars
 	bool mouse_locked; //tells if the mouse is locked (blocked in the center and not visible)

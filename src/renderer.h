@@ -1,6 +1,7 @@
 #pragma once
 #include "prefab.h"
-#include "entity.h"
+#include "BaseEntity.h"
+#include "scene.h"
 
 //forward declarations
 class Camera;
@@ -16,17 +17,13 @@ namespace GTR {
 
 	public:
 
-		//to render the scene to viewport
-		void renderSceneToScreen(GTR::Scene* scene, Camera* camera, Vector4 bg_color);
-
 		//to render the scene to texture (shadowmap)
 		std::vector<GTR::Light*> renderSceneShadowmaps(GTR::Scene* scene);
+
+		//to render the scene to viewport
+		void renderSceneToScreen(GTR::Scene* scene, Camera* camera);
 		
 		void renderPointShadowmap(Light* light);
-
-		void showSceneShadowmaps(std::vector<Light*> shadow_caster_lights);
-
-		void setDefaultGLFlags();
 
 		//to render a scene
 		void renderScene(GTR::Scene* scene, Camera* camera);
@@ -37,14 +34,25 @@ namespace GTR {
 		//to render one node from the prefab and its children
 		void renderNode(const Matrix44& model, GTR::Node* node, Camera* camera);
 
-		//manages blendign
-		void manageBlendingAndCulling(GTR::Material* material, bool rendering_light, bool is_first_pass = true);
-
-		//render shadowmap
-		bool Renderer::renderShadowMap(Shader* &shader, Material* material, Camera* camera, Matrix44 model, Mesh* mesh);
-
 		//to render one mesh given its material and transformation matrix
 		void renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
+
+		void renderWithoutLights(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
+		
+		void renderMultiPass(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
+		
+		Shader* chooseShader(GTR::Light* light);
+
+		void enableShader(Shader* shader);
+		//render shadowmap
+		void renderSimple(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
+
+		void showSceneShadowmaps(std::vector<Light*> shadow_caster_lights);
+
+		void setDefaultGLFlags();
+
+		//manages blendign
+		void manageBlendingAndCulling(GTR::Material* material, bool rendering_light, bool is_first_pass = true);
 	};
 
 };

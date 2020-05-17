@@ -54,7 +54,7 @@ namespace GTR {
 		Material(Texture* texture) : Material() { color_texture = texture; }
 		virtual ~Material();
 
-		void setUniforms(Shader* shader);
+		void setUniforms(Shader* shader, bool is_first_pass = true);
 
 		//render gui info inside the panel
 		void renderInMenu();

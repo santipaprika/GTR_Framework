@@ -106,7 +106,6 @@ void Renderer::renderIlluminationToBuffers(Camera* camera)
 	//clear to bg color (not working?)
 	gbuffers_fbo->enableSingleBuffer(0);
 	Vector4 bg_color = Scene::instance->bg_color;
-	std::cout << bg_color.x;
 	glClearColor(bg_color.x, bg_color.y, bg_color.z, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
 	gbuffers_fbo->enableAllBuffers();

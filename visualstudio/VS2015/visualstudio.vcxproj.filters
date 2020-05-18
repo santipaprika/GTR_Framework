@@ -102,7 +102,10 @@
     <ClCompile Include="..\..\src\material.cpp">
       <Filter>pipeline</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\entity.cpp">
+    <ClCompile Include="..\..\src\scene.cpp">
+      <Filter>pipeline</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\BaseEntity.cpp">
       <Filter>pipeline</Filter>
     </ClCompile>
   </ItemGroup>
@@ -204,7 +207,10 @@
     <ClInclude Include="..\..\src\material.h">
       <Filter>pipeline</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\entity.h">
+    <ClInclude Include="..\..\src\scene.h">
+      <Filter>pipeline</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\BaseEntity.h">
       <Filter>pipeline</Filter>
     </ClInclude>
   </ItemGroup>

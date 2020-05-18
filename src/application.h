@@ -25,18 +25,24 @@ public:
     float time;
 	float elapsed_time;
 	int fps;
+
 	bool must_exit;
 	bool render_debug;
 	bool render_grid;
 	bool render_gui;
 	
 	bool rendering_shadowmap;
-	bool show_shadowmaps = false;
+	bool show_shadowmaps;
+	bool show_gbuffers;
 
 	GTR::Light* light_selected;
 	GTR::PrefabEntity* prefab_selected;
 
 	Camera* camera;
+
+	bool use_deferred;
+	FBO* gbuffers_fbo;
+	FBO* illumination_fbo;
 
 	//some vars
 	bool mouse_locked; //tells if the mouse is locked (blocked in the center and not visible)

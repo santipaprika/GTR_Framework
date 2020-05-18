@@ -43,6 +43,9 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	prefab_selected = NULL;
 	light_selected = NULL;
 
+	show_gbuffers = false;
+	show_shadowmaps = false;
+
 	//loads and compiles several shaders from one single file
     //change to "data/shader_atlas_osx.txt" if you are in XCODE
 	if(!Shader::LoadAtlas("data/shader_atlas.txt"))
@@ -53,6 +56,28 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	camera = new Camera();
 	camera->lookAt(Vector3(-150.f, 150.0f, 250.f), Vector3(0.f, 0.0f, 0.f), Vector3(0.f, 1.f, 0.f));
 	camera->setPerspective( 45.f, window_width/(float)window_height, 1.0f, 10000.f);
+
+	use_deferred = true;
+
+	//initialize GBuffers for deferred (create FBO)
+	gbuffers_fbo = new FBO();
+
+	//create 3 textures of 4 components
+	gbuffers_fbo->create(window_width, window_height,
+		3, 			//three textures
+		GL_RGBA, 		//four channels
+		GL_UNSIGNED_BYTE, //1 byte
+		true);		//add depth_texture
+
+	//create and FBO
+	illumination_fbo = new FBO();
+
+	//create 3 textures of 4 components
+	illumination_fbo->create(window_width, window_height,
+		1, 			//three textures
+		GL_RGB, 		//three channels
+		GL_UNSIGNED_BYTE, //1 byte
+		false);		//add depth_texture
 
 	//This class will be the one in charge of rendering all 
 	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor
@@ -75,12 +100,14 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	scene->AddEntity(new GTR::PrefabEntity(plane_prefab));
 	scene->AddEntity(new GTR::PrefabEntity(car));
 
+	GTR::Light* sun = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0), Vector3(-0.3, -0.6, -0.1), "Sun", GTR::DIRECTIONAL);
 	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(0, 380, 0), Vector3(0, -0.9, 0.1), "Point", GTR::SPOT);
 	light1->cast_shadows = true;
 	light1->intensity = 20;
 	light1->updateLightCamera();
 
 	scene->AddEntity(light1);
+	scene->AddEntity(sun);
 
 
 	//hide the cursor
@@ -156,10 +183,22 @@ void Application::createScene()
 void Application::render(void)
 {
 	GTR::Scene* scene = GTR::Scene::instance;
-	std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
-	renderer->renderSceneToScreen(scene, camera);
-	renderer->showSceneShadowmaps(shadow_caster_lights);
+	if (use_deferred) {
+		renderer->renderGBuffers(scene, camera);
+		renderer->renderIlluminationToBuffers(camera);
 
+		glDisable(GL_DEPTH_TEST);
+		illumination_fbo->color_textures[0]->toViewport();
+
+		if (show_gbuffers)
+			renderer->showGBuffers();
+	}
+	else {	
+		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
+		renderer->renderSceneToScreen(scene, camera);
+		renderer->showSceneShadowmaps(shadow_caster_lights);
+	}
+	
 	//the swap buffers is done in the main loop after this function
 }
 
@@ -173,6 +212,9 @@ void Application::renderDebugGUI(void)
 	ImGui::Text(getGPUStats().c_str());					   // Display some text (you can use a format strings too)
 
 	ImGui::Checkbox("Wireframe", &render_wireframe);
+	ImGui::Checkbox("Deferred", &use_deferred);
+	if (use_deferred)
+		ImGui::Checkbox("Show GBuffers", &show_gbuffers);
 
 	GTR::Scene* scene = GTR::Scene::instance;
 

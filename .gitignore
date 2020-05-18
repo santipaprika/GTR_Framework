@@ -36,3 +36,7 @@
 *.idb
 *.pdb
 *.tlog
+*.iobj
+*.ipdb
+*.vcxproj
+*.filters

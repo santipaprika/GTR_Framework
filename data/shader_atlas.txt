@@ -7,6 +7,8 @@ noLights basic.vs noLights.fs
 phong basic.vs phong.fs
 phongShadows basic.vs phongShadows.fs
 phongAAShadows basic.vs phongAAShadows.fs
+gbuffers basic.vs gbuffers.fs
+deferred quad.vs deferred.fs
 
 // --------------------------------------------------------------------------
 
@@ -113,6 +115,7 @@ uniform vec4 u_color;
 uniform sampler2D u_texture;
 uniform float u_time;
 uniform float u_alpha_cutoff;
+uniform float u_tiles_number;
 
 out vec4 FragColor;
 
@@ -120,7 +123,7 @@ void main()
 {
 	vec2 uv = v_uv;
 	vec4 color = u_color;
-	color *= texture( u_texture, uv );
+	color *= texture( u_texture, uv * u_tiles_number);
 	if(color.a < u_alpha_cutoff)
 		discard;
 
@@ -141,6 +144,7 @@ uniform vec4 u_color;
 uniform sampler2D u_texture;
 uniform float u_time;
 uniform float u_alpha_cutoff;
+uniform float u_tiles_number;
 
 layout(location = 0) out vec4 FragColor;
 layout(location = 1) out vec4 NormalColor;
@@ -149,7 +153,7 @@ void main()
 {
 	vec2 uv = v_uv;
 	vec4 color = u_color;
-	color *= texture( u_texture, uv );
+	color *= texture( u_texture, uv * u_tiles_number);
 
 	if(color.a < u_alpha_cutoff)
 		discard;
@@ -229,6 +233,7 @@ uniform vec3 u_ambient_light;
 uniform sampler2D u_texture;
 uniform sampler2D u_emissive_texture;
 uniform sampler2D u_occlusion_texture;
+uniform float u_tiles_number;
 
 out vec4 FragColor;
 
@@ -241,9 +246,9 @@ void main()
 	vec3 light = vec3(0.0);
 	
 	//ambient
-	light += texture2D(u_occlusion_texture, uv).x * u_ambient_light; //ambient-occlusion filter applied
+	light += texture2D(u_occlusion_texture, uv * u_tiles_number).x * u_ambient_light; //ambient-occlusion filter applied
 
-	color *= texture2D( u_texture, uv );
+	color *= texture2D( u_texture, uv * u_tiles_number);
 	if(color.a < u_alpha_cutoff)
 		discard;
 
@@ -251,7 +256,7 @@ void main()
 	color.xyz *= light;
 	
 	//emissive
-	color.xyz += texture2D(u_emissive_texture, uv).xyz;
+	color.xyz += texture2D(u_emissive_texture, uv * u_tiles_number).xyz;
 
 	FragColor = color;
 }
@@ -366,9 +371,9 @@ void main()
 	light = computeLight(light);
 	
 	//add the ambient light
-	light += texture2D(u_occlusion_texture, uv).x * u_ambient_light; //ambient-occlusion filter applied
+	light += texture2D(u_occlusion_texture, uv * u_tiles_number).x * u_ambient_light; //ambient-occlusion filter applied
 
-	color *= texture2D( u_texture, uv );
+	color *= texture2D( u_texture, uv * u_tiles_number);
 	if(color.a < u_alpha_cutoff)
 		discard;
 
@@ -376,7 +381,7 @@ void main()
 	color.xyz *= light;
 	
 	//emissive
-	color.xyz += texture2D(u_emissive_texture, uv).xyz;
+	color.xyz += texture2D(u_emissive_texture, uv * u_tiles_number).xyz;
 	
 	FragColor = color;
 }
@@ -585,12 +590,12 @@ void main()
 	
 	//check if it is in shadow or not
 	if (!isShadowed())
-		light = computeLight(light); //function that returns the light using phong
+		light += computeLight(light); //function that returns the light using phong
 	
 	//add the ambient light
-	light += texture2D(u_occlusion_texture, uv).x * u_ambient_light; //ambient-occlusion filter applied
+	light += texture2D(u_occlusion_texture, uv * u_tiles_number).x * u_ambient_light; //ambient-occlusion filter applied
 
-	color *= texture2D( u_texture, uv );
+	color *= texture2D( u_texture, uv * u_tiles_number );
 	if(color.a < u_alpha_cutoff)
 		discard;
 
@@ -598,7 +603,7 @@ void main()
 	color.xyz *= light;
 	
 	//emissive
-	color.xyz += texture2D(u_emissive_texture, uv).xyz;
+	color.xyz += texture2D(u_emissive_texture, uv * u_tiles_number).xyz;
 	
 	FragColor = color;
 }
@@ -872,9 +877,9 @@ void main()
 	light += shadowFact * computeLight(light); //function that returns the light using phong
 	
 	//add the ambient light
-	light += texture2D(u_occlusion_texture, uv).x * u_ambient_light; //ambient-occlusion filter applied
+	light += texture2D(u_occlusion_texture, uv * u_tiles_number).x * u_ambient_light; //ambient-occlusion filter applied
 
-	color *= texture2D( u_texture, uv );
+	color *= texture2D( u_texture, uv * u_tiles_number);
 	if(color.a < u_alpha_cutoff)
 		discard;
 
@@ -882,11 +887,119 @@ void main()
 	color.xyz *= light;
 	
 	//emissive
-	color.xyz += texture2D(u_emissive_texture, uv).xyz;
+	color.xyz += texture2D(u_emissive_texture, uv * u_tiles_number).xyz;
 	
 	FragColor = color;
 }
 
 
 // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// -------------------------- DEFERRED -----------------------------------
+// -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
 
+
+\gbuffers.fs
+
+#version 330
+
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
+
+uniform vec4 u_color;
+uniform float u_tiles_number;
+uniform sampler2D u_texture;
+uniform sampler2D u_occlusion_texture;
+uniform float u_time;
+uniform float u_alpha_cutoff;
+
+layout(location = 0) out vec4 FragColor;
+layout(location = 1) out vec4 NormalColor;
+layout(location = 2) out vec4 ExtraColor;
+
+void main()
+{
+	vec2 uv = v_uv;
+	vec4 color = u_color;
+	
+	if(color.a < u_alpha_cutoff)
+		discard;
+	
+	vec4 matProperties = color * texture( u_occlusion_texture, uv * u_tiles_number);
+	
+	color *= texture( u_texture, uv * u_tiles_number);
+	//discard some pixels depending on the pixel screen position and its transparency
+	if(	color.a < 0.9 && floor(mod(gl_FragCoord.x,2.0)) != floor(mod(gl_FragCoord.y,2.0)) )
+		discard;
+
+	FragColor = color;
+	
+	vec3 N = v_normal;
+	NormalColor = vec4(N*0.5 + vec3(0.5),1.0);
+	
+	ExtraColor = matProperties;
+}
+
+
+
+\deferred.fs
+
+#version 330
+
+uniform sampler2D u_color_texture;
+uniform sampler2D u_normal_texture;
+uniform sampler2D u_extra_texture;
+uniform sampler2D u_depth_texture;
+uniform mat4 u_inverse_viewprojection;
+uniform vec2 u_iRes;
+
+uniform vec3 u_ambient_light;
+
+uniform vec3 u_light_color;
+uniform int u_light_type;
+uniform vec3 u_light_direction;
+uniform vec3 u_light_position;
+uniform float u_light_intensity;
+
+
+layout(location = 0) out vec4 FragColor;
+
+vec3 getDirectionalLight(vec3 N)
+{
+	//if the light is a directional light the light vector is the same for all pixels
+	vec3 L = normalize(-u_light_direction);	//light vector goes in opposite direction
+		
+	//compute how much is aligned
+	float NdotL = dot(N,L);
+
+	//light cannot be negative (but the dot product can)
+	NdotL = clamp( NdotL, 0.0, 1.0 );
+	
+	return NdotL * u_light_color * u_light_intensity;
+}
+
+void main()
+{
+	vec2 uv = gl_FragCoord.xy * u_iRes.xy; //extract uvs from pixel screenpos
+	vec3 color = texture( u_color_texture, uv ).xyz;
+	//normals must be converted from 0..1 to -1..+1
+	vec3 N = texture( u_normal_texture, uv ).xyz * 2.0 - 1.0;
+	N = normalize(N); //always normalize in case of data loss
+	//reconstruct world position from depth and inv. viewproj
+	float depth = texture( u_depth_texture, uv ).x;
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+	
+	vec3 light = vec3(0.0);
+	light += texture(u_extra_texture, uv).x * u_ambient_light; // ambient
+	light += getDirectionalLight(N);
+	
+	color *= light;
+	
+	FragColor = vec4(color, 1.0);
+}

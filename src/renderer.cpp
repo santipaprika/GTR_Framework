@@ -13,6 +13,190 @@
 
 using namespace GTR;
 
+
+//DEFERRED
+
+void Renderer::renderGBuffers(Scene* scene, Camera* camera)
+{
+	FBO* gbuffers_fbo = Application::instance->gbuffers_fbo;
+
+	gbuffers_fbo->bind();
+	//we clear in several passes so we can control the clear color independently for every gbuffer
+
+	//disable all but the GB0 (and the depth)
+	gbuffers_fbo->enableSingleBuffer(0);
+
+	//clear GB0 with the color (and depth)
+	glClearColor(0.1, 0.1, 0.1, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	//and now enable the second GB to clear it to black
+	gbuffers_fbo->enableSingleBuffer(1);
+	glClearColor(0.0, 0.0, 0.0, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+	
+	gbuffers_fbo->enableSingleBuffer(2);
+	glClearColor(0.0, 0.0, 0.0, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+	
+	//enable all buffers back
+	gbuffers_fbo->enableAllBuffers();
+
+	//render everything 
+	renderScene(scene, camera);
+
+	//stop rendering to the gbuffers
+	gbuffers_fbo->unbind();
+}
+
+void Renderer::renderToGBuffers(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera)
+{
+	Shader* shader = Shader::Get("gbuffers");
+	glEnable(GL_DEPTH_TEST);
+	assert(glGetError() == GL_NO_ERROR);
+
+	if (material->alpha_mode == GTR::BLEND)
+		return;
+
+	shader->enable();
+
+	shader->setUniform("u_camera_pos", camera->eye);
+	shader->setUniform("u_model", model);
+	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+
+	material->setUniforms(shader, true);
+
+	mesh->render(GL_TRIANGLES);
+
+	shader->disable();
+}
+
+void Renderer::showGBuffers()
+{
+	Application* application = Application::instance;
+	float window_width = application->window_width;
+	float window_height = application->window_height;
+
+	glDisable(GL_DEPTH_TEST);
+
+	glViewport(0, window_height * 0.5, window_width * 0.5, window_height * 0.5);
+	application->gbuffers_fbo->color_textures[0]->toViewport();
+
+	glViewport(window_width * 0.5, window_height * 0.5, window_width * 0.5, window_height * 0.5);
+	application->gbuffers_fbo->color_textures[1]->toViewport();
+
+	glViewport(0, 0, window_width * 0.5, window_height * 0.5);
+	application->gbuffers_fbo->color_textures[2]->toViewport();
+
+	Shader* shader = Shader::Get("depth");
+	shader->enable();
+	shader->setUniform("u_camera_nearfar", Vector2(application->camera->near_plane, application->camera->far_plane));
+	glViewport(window_width * 0.5, 0, window_width * 0.5, window_height * 0.5);
+	application->gbuffers_fbo->depth_texture->toViewport(shader);
+}
+
+void Renderer::renderIlluminationToBuffers(Camera* camera)
+{
+	FBO* illumination_fbo = Application::instance->illumination_fbo;
+	FBO* gbuffers_fbo = Application::instance->gbuffers_fbo;
+
+	//start rendering to the illumination fbo
+	illumination_fbo->bind();
+
+	//clear to bg color (not working?)
+	gbuffers_fbo->enableSingleBuffer(0);
+	Vector4 bg_color = Scene::instance->bg_color;
+	std::cout << bg_color.x;
+	glClearColor(bg_color.x, bg_color.y, bg_color.z, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+	gbuffers_fbo->enableAllBuffers();
+
+	//we need a fullscreen quad
+	Mesh* quad = Mesh::getQuad();
+
+	std::vector<Light*> scene_lights = Scene::instance->lights;
+
+	Shader* sh = Shader::Get("deferred");
+	sh->enable();
+
+	//pass the gbuffers to the shader
+	sh->setUniform("u_color_texture", gbuffers_fbo->color_textures[0], 0);
+	sh->setUniform("u_normal_texture", gbuffers_fbo->color_textures[1], 1);
+	sh->setUniform("u_extra_texture", gbuffers_fbo->color_textures[2], 2);
+	sh->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 3);
+
+	Matrix44 inv_vp = camera->viewprojection_matrix;
+	inv_vp.inverse();
+
+	//pass the inverse projection of the camera to reconstruct world pos.
+	sh->setUniform("u_inverse_viewprojection", inv_vp);
+	//pass the inverse window resolution, this may be useful
+	sh->setUniform("u_iRes", Vector2(1.0 / (float)Application::instance->window_width, 1.0 / (float)Application::instance->window_height));
+
+	//pass all the information about the light and ambient…
+	Scene* scene = Scene::instance;
+	sh->setUniform("u_ambient_light", scene->ambient_light * scene->ambient_power);
+	
+	for (auto light : scene_lights)		// MULTI PASS
+	{
+		if (light->name == "Sun") {
+			light->setLightUniforms(sh);
+			break;
+		}
+	}
+
+	glDisable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+
+	quad->render(GL_TRIANGLES);
+	
+	sh->disable();
+	illumination_fbo->unbind();
+	//glEnable(GL_BLEND);
+	//glBlendFunc(GL_ONE, GL_ONE);
+	
+
+
+	bool is_first_pass = true;
+	for (auto light : scene_lights)		// MULTI PASS
+	{
+		// skip iteration if light is far from mesh && light is point light && is not first pass (bc first pass must be done to paint the mesh with ambient light))
+		/*if (!mesh->testSphereCollision(model, light->model.getTranslation(), light->max_distance, Vector3(0, 0, 0), Vector3(0, 0, 0)) && light->light_type == GTR::POINT && !is_first_pass)
+			continue;
+
+		if (!light->camera->testBoxInFrustum(mesh->box.center, mesh->box.halfsize) && light->light_type == GTR::SPOT && !is_first_pass)
+			continue;*/
+
+		//manageBlendingAndCulling(material, true, is_first_pass);
+
+		//Shader* shader = chooseShader(light);
+
+		//we need a shader specially for this task, lets call it "deferred"
+		
+
+	
+		//glDisable(GL_DEPTH_TEST);
+
+		////render a fullscreen quad
+		//quad->render(GL_TRIANGLES);
+
+		//shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+		//shader->setUniform("u_camera_position", camera->eye);
+		//shader->setUniform("u_model", model);
+
+		//material->setUniforms(shader, is_first_pass);
+
+		//shader->setUniform("u_ambient_light", Scene::instance->ambient_light * is_first_pass);
+
+		//mesh->render(GL_TRIANGLES);
+
+		//shader->disable();
+		//is_first_pass = false;
+	}
+}
+
+//MULTIPASS
+
 std::vector<Light*> Renderer::renderSceneShadowmaps(GTR::Scene* scene)
 {
 	Application::instance->rendering_shadowmap = true;
@@ -187,13 +371,18 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 
 	std::vector<Light*> scene_lights = Scene::instance->lights;
 
-	if (Application::instance->rendering_shadowmap)
-		renderSimple(model, mesh, material, camera);
+	if (Application::instance->use_deferred) {
+		renderToGBuffers(model, mesh, material, camera);
+	}
 	else {
-		if (scene_lights.empty())
-			renderWithoutLights(model, mesh, material, camera);
-		else
-			renderMultiPass(model, mesh, material, camera);
+		if (Application::instance->rendering_shadowmap)
+			renderSimple(model, mesh, material, camera);
+		else {
+			if (scene_lights.empty())
+				renderWithoutLights(model, mesh, material, camera);
+			else
+				renderMultiPass(model, mesh, material, camera);
+		}
 	}
 
 	//set the render state as it was before to avoid problems with future renders
@@ -204,17 +393,13 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 
 void Renderer::renderWithoutLights(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera)
 {
-	Texture* black_tex = Texture::getBlackTexture();
-	Texture* white_tex = Texture::getWhiteTexture();
-	//Texture* texture = (material->color_texture) ? material->color_texture : white_tex;
 
 	manageBlendingAndCulling(material, false);
 
 	Shader* shader = Shader::Get("noLights");
+	
 	//no shader? then nothing to render
-	if (!shader)
-		return;
-	shader->enable();
+	enableShader(shader);
 
 	//upload uniforms
 	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
@@ -223,7 +408,7 @@ void Renderer::renderWithoutLights(const Matrix44 model, Mesh* mesh, GTR::Materi
 
 	shader->setUniform("u_ambient_light", GTR::Scene::instance->ambient_light * GTR::Scene::instance->ambient_power);
 
-	material->setUniforms(shader);
+	material->setUniforms(shader, true);
 
 	//do the draw call that renders the mesh into the screen
 	mesh->render(GL_TRIANGLES);
@@ -260,9 +445,9 @@ void Renderer::renderMultiPass(const Matrix44 model, Mesh* mesh, GTR::Material* 
 		shader->setUniform("u_camera_position", camera->eye);
 		shader->setUniform("u_model", model);
 
-		material->setUniforms(shader);
+		material->setUniforms(shader, is_first_pass);
 
-		shader->setUniform("u_ambient_light", Scene::instance->ambient_light * is_first_pass);
+		shader->setUniform("u_ambient_light", Scene::instance->ambient_light * GTR::Scene::instance->ambient_power * is_first_pass);
 
 		mesh->render(GL_TRIANGLES);
 
@@ -314,7 +499,7 @@ void Renderer::renderSimple(const Matrix44 model, Mesh* mesh, GTR::Material* mat
 	Shader* shader = Shader::Get("flat");
 	assert(glGetError() == GL_NO_ERROR);
 
-	if (material->alpha_mode == GTR::BLEND)
+	if (material->alpha_mode == GTR::BLEND && Application::instance->rendering_shadowmap)
 		return;
 
 	shader->enable();

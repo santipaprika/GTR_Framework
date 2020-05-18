@@ -17,7 +17,7 @@ Scene::Scene()
 
 	ambient_light = Vector3(0.2, 0.2, 0.35);
 	bg_color = Vector4(0.5, 0.5, 0.5, 1.0);
-	ambient_power = 0.2;
+	ambient_power = 1.0;
 
 	//flags
 	reverse_shadowmap = false;

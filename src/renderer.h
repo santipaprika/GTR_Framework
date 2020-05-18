@@ -16,7 +16,16 @@ namespace GTR {
 	{
 
 	public:
+		// DEFERRED
+		void renderGBuffers(Scene* scene, Camera* camera);
 
+		void renderToGBuffers(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
+
+		void showGBuffers();
+
+		void renderIlluminationToBuffers(Camera* camera);
+
+		// MULTIPASS
 		//to render the scene to texture (shadowmap)
 		std::vector<GTR::Light*> renderSceneShadowmaps(GTR::Scene* scene);
 

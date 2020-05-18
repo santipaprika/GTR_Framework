@@ -8,6 +8,7 @@
 #include "includes.h"
 #include "camera.h"
 #include "utils.h"
+#include "BaseEntity.h"
 
 class Application
 {
@@ -24,15 +25,32 @@ public:
     float time;
 	float elapsed_time;
 	int fps;
+
 	bool must_exit;
 	bool render_debug;
+	bool render_grid;
 	bool render_gui;
+	
+	bool rendering_shadowmap;
+	bool show_shadowmaps;
+	bool show_gbuffers;
+
+	GTR::Light* light_selected;
+	GTR::PrefabEntity* prefab_selected;
+
+	Camera* camera;
+
+	bool use_deferred;
+	FBO* gbuffers_fbo;
+	FBO* illumination_fbo;
 
 	//some vars
 	bool mouse_locked; //tells if the mouse is locked (blocked in the center and not visible)
 	bool render_wireframe; //in case we want to render everything in wireframe mode
 
 	Application( int window_width, int window_height, SDL_Window* window );
+
+	void createScene();
 
 	//main functions
 	void render( void );

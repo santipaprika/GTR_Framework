@@ -1,6 +1,7 @@
 #pragma once
 
 #include "framework.h"
+#include "shader.h"
 #include <cassert>
 #include <map>
 #include <string>
@@ -30,6 +31,7 @@ namespace GTR {
 		AlphaMode alpha_mode;	//could be NO_ALPHA, MASK (alpha cut) or BLEND (alpha blend)
 		float alpha_cutoff;		//pixels with alpha than this value shouldnt be rendered
 		bool two_sided;			//render both faces of the triangles
+		float tiles_number = 1;		//to control size and tileability of the material
 
 								//material properties
 		Vector4 color;			//color and opacity
@@ -51,6 +53,8 @@ namespace GTR {
 		}
 		Material(Texture* texture) : Material() { color_texture = texture; }
 		virtual ~Material();
+
+		void setUniforms(Shader* shader, bool is_first_pass = true);
 
 		//render gui info inside the panel
 		void renderInMenu();

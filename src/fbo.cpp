@@ -69,6 +69,11 @@ bool FBO::create( int width, int height, int num_textures, int format, int type,
 		glBindTexture(colortex->texture_type, colortex->texture_id);	//we activate this id to tell opengl we are going to use this texture
 		glTexParameteri(colortex->texture_type, GL_TEXTURE_MAG_FILTER, GL_NEAREST);	//set the min filter
 		glTexParameteri(colortex->texture_type, GL_TEXTURE_MIN_FILTER, GL_NEAREST);   //set the mag filter
+
+		//This two lines make the sampler2DShadow work
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+
 		glTexParameteri(colortex->texture_type, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(colortex->texture_type, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	}

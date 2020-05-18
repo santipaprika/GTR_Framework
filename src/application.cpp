@@ -10,20 +10,16 @@
 #include "prefab.h"
 #include "gltf_loader.h"
 #include "renderer.h"
+#include "scene.h"
 
 #include <cmath>
 #include <string>
 #include <cstdio>
 
 Application* Application::instance = nullptr;
-Vector4 bg_color(0.5, 0.5, 0.5, 1.0);
-
-Camera* camera = nullptr;
-GTR::Prefab* prefab = nullptr;
+GTR::BaseEntity* selectedEntity = nullptr;
 GTR::Renderer* renderer = nullptr;
 FBO* fbo = nullptr;
-Texture* texture = nullptr;
-
 float cam_speed = 10;
 
 Application::Application(int window_width, int window_height, SDL_Window* window)
@@ -44,6 +40,12 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	elapsed_time = 0.0f;
 	mouse_locked = false;
 
+	prefab_selected = NULL;
+	light_selected = NULL;
+
+	show_gbuffers = false;
+	show_shadowmaps = false;
+
 	//loads and compiles several shaders from one single file
     //change to "data/shader_atlas_osx.txt" if you are in XCODE
 	if(!Shader::LoadAtlas("data/shader_atlas.txt"))
@@ -55,55 +57,180 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	camera->lookAt(Vector3(-150.f, 150.0f, 250.f), Vector3(0.f, 0.0f, 0.f), Vector3(0.f, 1.f, 0.f));
 	camera->setPerspective( 45.f, window_width/(float)window_height, 1.0f, 10000.f);
 
+	use_deferred = true;
+
+	//initialize GBuffers for deferred (create FBO)
+	gbuffers_fbo = new FBO();
+
+	//create 3 textures of 4 components
+	gbuffers_fbo->create(window_width, window_height,
+		3, 			//three textures
+		GL_RGBA, 		//four channels
+		GL_UNSIGNED_BYTE, //1 byte
+		true);		//add depth_texture
+
+	//create and FBO
+	illumination_fbo = new FBO();
+
+	//create 3 textures of 4 components
+	illumination_fbo->create(window_width, window_height,
+		1, 			//three textures
+		GL_RGB, 		//three channels
+		GL_UNSIGNED_BYTE, //1 byte
+		false);		//add depth_texture
+
 	//This class will be the one in charge of rendering all 
 	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor
 
-	//Lets load some object to render
-	prefab = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
+	//createScene();
+	
+	GTR::Node plane_node = GTR::Node();
+	plane_node.mesh = new Mesh();
+	plane_node.mesh->createPlane(2048.0);
+	plane_node.material = new GTR::Material(Texture::Get("data/textures/asphalt.png"));
+	plane_node.material->name = "Road";
+	plane_node.material->tiles_number = 4.4;
+
+	GTR::Prefab* plane_prefab = new GTR::Prefab();
+	plane_prefab->name = "Floor";
+	plane_prefab->root = plane_node;
+
+	GTR::Scene* scene = new GTR::Scene();
+	GTR::Prefab* car = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
+	scene->AddEntity(new GTR::PrefabEntity(plane_prefab));
+	scene->AddEntity(new GTR::PrefabEntity(car));
+
+	GTR::Light* sun = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0), Vector3(-0.3, -0.6, -0.1), "Sun", GTR::DIRECTIONAL);
+	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(0, 380, 0), Vector3(0, -0.9, 0.1), "Point", GTR::SPOT);
+	light1->cast_shadows = true;
+	light1->intensity = 20;
+	light1->updateLightCamera();
+
+	scene->AddEntity(light1);
+	scene->AddEntity(sun);
+
 
 	//hide the cursor
 	SDL_ShowCursor(!mouse_locked); //hide or show the mouse
 }
 
+void Application::createScene()
+{
+	//initialize scene
+	GTR::Scene* scene = new GTR::Scene();
+
+	//Load lights (the constructor adds them automatically to the scene)
+	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(-1280, 380, 510), Vector3(0, 0, 1), "Point", GTR::POINT);
+	light1->max_distance = 1500;
+	light1->updateLightCamera();
+	//light1->intensity = 500;
+	GTR::Light* light2 = new GTR::Light(Color::GREEN, Vector3(120, 830, -120), Vector3(0.4, -0.85, 0.34), "Spot house", GTR::SPOT);
+	light2->setCutoffAngle(65.0);
+
+	GTR::Light* light3 = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0), Vector3(0, -0.1, -0.8), "Sun", GTR::DIRECTIONAL);
+	light3->max_distance = 1500;
+	light3->ortho_cam_size = 2000;
+	light3->updateLightCamera();
+
+	GTR::Light* light4 = new GTR::Light(Color::TURQUESE, Vector3(1520, 330, -175), Vector3(-0.23, -0.5, 0.8), "Spot cars", GTR::SPOT);
+	light4->setCutoffAngle(22.0);
+
+	//Add lights into scene
+	scene->AddEntity(light3);
+	scene->AddEntity(light1);
+	scene->AddEntity(light2);
+	scene->AddEntity(light4);
+
+	//Create plane
+	GTR::Node plane_node = GTR::Node();
+	plane_node.mesh = new Mesh();
+	plane_node.mesh->createPlane(2048.0);
+	plane_node.material = new GTR::Material(Texture::Get("data/textures/asphalt.png"));
+	plane_node.material->name = "Road";
+	plane_node.material->tiles_number = 4.4;
+
+	//Create prefabs
+	GTR::Prefab* plane_prefab = new GTR::Prefab();
+	plane_prefab->name = "Floor";
+	plane_prefab->root = plane_node;
+
+	GTR::Prefab* car = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
+	GTR::Prefab* lowres_car = GTR::Prefab::Get("data/prefabs/gmc_lowres/lowres_scene.gltf");
+	GTR::Prefab* lamp = GTR::Prefab::Get("data/prefabs/lamp/scene.gltf");
+	lamp->root.model.scale(50, 50, 50);
+	GTR::Prefab* house = GTR::Prefab::Get("data/prefabs/house/scene.gltf");
+	house->root.model.scale(0.35, 0.35, 0.35);
+
+
+	//Add to prefabs list
+	//scene->AddEntity(new GTR::PrefabEntity(sphere_prefab, light1->model.getTranslation()));
+	scene->AddEntity(new GTR::PrefabEntity(plane_prefab));
+	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(0, 0, 0), Vector3(0, 0, 0), "Car 1", lowres_car));
+	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(200, 0, 60), Vector3(0, 40, 0), "Car 2", lowres_car));
+	scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(150, 0, 200), Vector3(0, 90, 0)));
+	scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(0, 0, 200), Vector3(0, 0, 0)));
+	scene->AddEntity(new GTR::PrefabEntity(house, Vector3(250, 0, 100)));
+
+	for (int i = 0; i < 5; i++) {
+		for (int j = 0; j < 5; j++) {
+			scene->AddEntity(new GTR::PrefabEntity(car, Vector3(1000 + i * 150, 0, j * 300), Vector3(0, 0, 0), "Car Parking", lowres_car));
+			scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(-1000 - i * 200 + random(50, -25), 0, j * 200 + random(50, -25)), Vector3(0, 60 * (i + j), 0)));
+		}
+	}
+}
+
 //what to do when the image has to be draw
 void Application::render(void)
 {
-	//be sure no errors present in opengl before start
-	checkGLErrors();
+	GTR::Scene* scene = GTR::Scene::instance;
+	if (use_deferred) {
+		renderer->renderGBuffers(scene, camera);
+		renderer->renderIlluminationToBuffers(camera);
 
-	//set the clear color (the background color)
-	glClearColor(bg_color.x, bg_color.y, bg_color.z, bg_color.w );
+		glDisable(GL_DEPTH_TEST);
+		illumination_fbo->color_textures[0]->toViewport();
 
-	// Clear the color and the depth buffer
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-    checkGLErrors();
-    
-	//set the camera as default (used by some functions in the framework)
-	camera->enable();
-
-	//set default flags
-	glDisable(GL_BLEND);
-    
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_CULL_FACE);
-	if(render_wireframe)
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	else
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-	//lets render something
-	Matrix44 model;
-	renderer->renderPrefab( model, prefab, camera );
-
-	//Draw the floor grid, helpful to have a reference point
-	if(render_debug)
-		drawGrid();
-
-    //glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glDisable(GL_DEPTH_TEST);
-    //render anything in the gui after this
-    
+		if (show_gbuffers)
+			renderer->showGBuffers();
+	}
+	else {	
+		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
+		renderer->renderSceneToScreen(scene, camera);
+		renderer->showSceneShadowmaps(shadow_caster_lights);
+	}
+	
 	//the swap buffers is done in the main loop after this function
+}
+
+
+//called to render the GUI from
+void Application::renderDebugGUI(void)
+{
+#ifndef SKIP_IMGUI //to block this code from compiling if we want
+
+	//System stats
+	ImGui::Text(getGPUStats().c_str());					   // Display some text (you can use a format strings too)
+
+	ImGui::Checkbox("Wireframe", &render_wireframe);
+	ImGui::Checkbox("Deferred", &use_deferred);
+	if (use_deferred)
+		ImGui::Checkbox("Show GBuffers", &show_gbuffers);
+
+	GTR::Scene* scene = GTR::Scene::instance;
+
+	//add info to the debug panel about the camera
+	if (ImGui::TreeNode(camera, "Camera")) {
+		camera->renderInMenu();
+		ImGui::TreePop();
+	}
+
+	//add info to the debug panel about the scene
+	if (ImGui::TreeNode(scene, "Scene")) {
+		scene->renderInMenu();
+		ImGui::TreePop();
+	}
+
+	#endif
 }
 
 void Application::update(double seconds_elapsed)
@@ -160,14 +287,20 @@ void Application::update(double seconds_elapsed)
 
 void Application::renderDebugGizmo()
 {
-	if (!prefab)
-		return;
+	GTR::BaseEntity* prefab = NULL;
+	//this configuration will priorize the prefabs than the lights
+	if (prefab_selected != NULL)
+		prefab = prefab_selected;
+	else if (light_selected != NULL) {
+		if (light_selected->light_type != GTR::DIRECTIONAL)
+			prefab = light_selected;
+	}
 
+	if (prefab == NULL) return;
 	//example of matrix we want to edit, change this to the matrix of your entity
-	Matrix44& matrix = prefab->root.model;
+	Matrix44& matrix = prefab->model;
 
 	#ifndef SKIP_IMGUI
-
 	static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::TRANSLATE);
 	static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
 	if (ImGui::IsKeyPressed(90))
@@ -223,35 +356,19 @@ void Application::renderDebugGizmo()
 	ImGuiIO& io = ImGui::GetIO();
 	ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
 	ImGuizmo::Manipulate(camera->view_matrix.m, camera->projection_matrix.m, mCurrentGizmoOperation, mCurrentGizmoMode, matrix.m, NULL, useSnap ? &snap.x : NULL);
+	
+	if (light_selected != NULL) {
+		light_selected->light_node->model = light_selected->model;
+		light_selected->light_node->model.scale(3,3,3);
+
+		// if want the light to be static (i.e. shadows won't be computed at every frame), don't update the light information. Otherwise, shadowmap will react to current model.
+		if (light_selected->update_shadowmap)
+			light_selected->updateLightCamera();
+	}
 	#endif
 }
 
 
-//called to render the GUI from
-void Application::renderDebugGUI(void)
-{
-#ifndef SKIP_IMGUI //to block this code from compiling if we want
-
-	//System stats
-	ImGui::Text(getGPUStats().c_str());					   // Display some text (you can use a format strings too)
-
-	ImGui::Checkbox("Wireframe", &render_wireframe);
-	ImGui::ColorEdit4("BG color", bg_color.v);
-
-	//add info to the debug panel about the camera
-	if (ImGui::TreeNode(camera, "Camera")) {
-		camera->renderInMenu();
-		ImGui::TreePop();
-	}
-
-	//example to show prefab info: first param must be unique!
-	if (prefab && ImGui::TreeNode(prefab, "Prefab")) {
-		prefab->root.renderInMenu();
-		ImGui::TreePop();
-	}
-
-#endif
-}
 
 //Keyboard event handler (sync input)
 void Application::onKeyDown( SDL_KeyboardEvent event )
@@ -260,7 +377,9 @@ void Application::onKeyDown( SDL_KeyboardEvent event )
 	{
 		case SDLK_ESCAPE: must_exit = true; break; //ESC key, kill the app
 		case SDLK_F1: render_debug = !render_debug; break;
+		case SDLK_F2: render_grid = !render_grid; break;
 		case SDLK_f: camera->center.set(0, 0, 0); camera->updateViewMatrix(); break;
+		case SDLK_SPACE: selectedEntity = NULL;
 		case SDLK_F5: Shader::ReloadAll(); break;
 	}
 }
@@ -279,6 +398,7 @@ void Application::onGamepadButtonUp(SDL_JoyButtonEvent event)
 
 }
 
+float down_time;
 void Application::onMouseButtonDown( SDL_MouseButtonEvent event )
 {
 	if (event.button == SDL_BUTTON_MIDDLE) //middle mouse
@@ -287,10 +407,14 @@ void Application::onMouseButtonDown( SDL_MouseButtonEvent event )
 		mouse_locked = !mouse_locked;
 		SDL_ShowCursor(!mouse_locked);
 	}
+
+	if (event.button == SDL_BUTTON_LEFT)
+		down_time = time;
 }
 
 void Application::onMouseButtonUp(SDL_MouseButtonEvent event)
 {
+
 }
 
 void Application::onMouseWheel(SDL_MouseWheelEvent event)

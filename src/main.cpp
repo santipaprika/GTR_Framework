@@ -102,7 +102,7 @@ void renderDebug(SDL_Window* window, Application * app)
 
 	if (app->render_debug)
 	{
-		if (ImGui::Begin("Debugger"))// Create a window
+		if (ImGui::Begin("Debugger")) // Create a window
 			app->renderDebugGUI();
 		ImGui::End();
 	}

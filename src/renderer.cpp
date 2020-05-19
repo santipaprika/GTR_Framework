@@ -36,7 +36,7 @@ void Renderer::renderGBuffers(Scene* scene, Camera* camera)
 	glClear(GL_COLOR_BUFFER_BIT);
 	
 	gbuffers_fbo->enableSingleBuffer(2);
-	glClearColor(0.0, 0.0, 0.0, 1.0);
+	glClearColor(1.0, 0.0, 0.0, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
 	
 	//enable all buffers back
@@ -99,6 +99,8 @@ void Renderer::renderIlluminationToBuffers(Camera* camera)
 {
 	FBO* illumination_fbo = Application::instance->illumination_fbo;
 	FBO* gbuffers_fbo = Application::instance->gbuffers_fbo;
+	std::vector<Light*> scene_lights = Scene::instance->lights;
+	Scene* scene = Scene::instance;
 
 	//start rendering to the illumination fbo
 	illumination_fbo->bind();
@@ -113,7 +115,6 @@ void Renderer::renderIlluminationToBuffers(Camera* camera)
 	//we need a fullscreen quad
 	Mesh* quad = Mesh::getQuad();
 
-	std::vector<Light*> scene_lights = Scene::instance->lights;
 
 	Shader* sh = Shader::Get("deferred");
 	sh->enable();
@@ -133,16 +134,15 @@ void Renderer::renderIlluminationToBuffers(Camera* camera)
 	sh->setUniform("u_iRes", Vector2(1.0 / (float)Application::instance->window_width, 1.0 / (float)Application::instance->window_height));
 
 	//pass all the information about the light and ambient…
-	Scene* scene = Scene::instance;
 	sh->setUniform("u_ambient_light", scene->ambient_light * scene->ambient_power);
 	
-	for (auto light : scene_lights)		// MULTI PASS
+	/*for (auto light : scene_lights)
 	{
 		if (light->name == "Sun") {
 			light->setLightUniforms(sh);
 			break;
 		}
-	}
+	}*/
 
 	glDisable(GL_BLEND);
 	glDisable(GL_DEPTH_TEST);
@@ -150,25 +150,42 @@ void Renderer::renderIlluminationToBuffers(Camera* camera)
 	quad->render(GL_TRIANGLES);
 	
 	sh->disable();
-	illumination_fbo->unbind();
-	//glEnable(GL_BLEND);
-	//glBlendFunc(GL_ONE, GL_ONE);
-	
 
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
 
 	bool is_first_pass = true;
 	for (auto light : scene_lights)		// MULTI PASS
 	{
 		// skip iteration if light is far from mesh && light is point light && is not first pass (bc first pass must be done to paint the mesh with ambient light))
-		/*if (!mesh->testSphereCollision(model, light->model.getTranslation(), light->max_distance, Vector3(0, 0, 0), Vector3(0, 0, 0)) && light->light_type == GTR::POINT && !is_first_pass)
-			continue;
+		//if (!mesh->testSphereCollision(model, light->model.getTranslation(), light->max_distance, Vector3(0, 0, 0), Vector3(0, 0, 0)) && light->light_type == GTR::POINT && !is_first_pass)
+			//continue;
 
-		if (!light->camera->testBoxInFrustum(mesh->box.center, mesh->box.halfsize) && light->light_type == GTR::SPOT && !is_first_pass)
-			continue;*/
+		//if (!light->camera->testBoxInFrustum(mesh->box.center, mesh->box.halfsize) && light->light_type == GTR::SPOT && !is_first_pass)
+			//continue;*/
 
+		
 		//manageBlendingAndCulling(material, true, is_first_pass);
 
-		//Shader* shader = chooseShader(light);
+		Shader* shader = chooseShader(light);
+
+		//pass the gbuffers to the shader
+		shader->setUniform("u_color_texture", gbuffers_fbo->color_textures[0], 0);
+		shader->setUniform("u_normal_texture", gbuffers_fbo->color_textures[1], 1);
+		shader->setUniform("u_extra_texture", gbuffers_fbo->color_textures[2], 2);
+		shader->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 3);
+
+		Matrix44 inv_vp_mp = camera->viewprojection_matrix;
+		inv_vp_mp.inverse();
+
+		//pass the inverse projection of the camera to reconstruct world pos.
+		shader->setUniform("u_inverse_viewprojection", inv_vp_mp);
+		//pass the inverse window resolution, this may be useful
+		shader->setUniform("u_iRes", Vector2(1.0 / (float)Application::instance->window_width, 1.0 / (float)Application::instance->window_height));
+
+		quad->render(GL_TRIANGLES);
+
+		shader->disable();
 
 		//we need a shader specially for this task, lets call it "deferred"
 		
@@ -189,9 +206,11 @@ void Renderer::renderIlluminationToBuffers(Camera* camera)
 
 		//mesh->render(GL_TRIANGLES);
 
-		//shader->disable();
 		//is_first_pass = false;
 	}
+
+	illumination_fbo->unbind();
+	setDefaultGLFlags();
 }
 
 //MULTIPASS
@@ -237,6 +256,7 @@ std::vector<Light*> Renderer::renderSceneShadowmaps(GTR::Scene* scene)
 	}
 
 	glDisable(GL_CULL_FACE);
+	Application::instance->rendering_shadowmap = false;
 
 	return shadow_casting_lights;
 }
@@ -370,18 +390,15 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 
 	std::vector<Light*> scene_lights = Scene::instance->lights;
 
-	if (Application::instance->use_deferred) {
+	if (Application::instance->rendering_shadowmap)
+		renderSimple(model, mesh, material, camera);
+	else if (Application::instance->use_deferred)
 		renderToGBuffers(model, mesh, material, camera);
-	}
 	else {
-		if (Application::instance->rendering_shadowmap)
-			renderSimple(model, mesh, material, camera);
-		else {
-			if (scene_lights.empty())
-				renderWithoutLights(model, mesh, material, camera);
-			else
-				renderMultiPass(model, mesh, material, camera);
-		}
+		if (scene_lights.empty())
+			renderWithoutLights(model, mesh, material, camera);
+		else
+			renderMultiPass(model, mesh, material, camera);
 	}
 
 	//set the render state as it was before to avoid problems with future renders
@@ -458,17 +475,24 @@ void Renderer::renderMultiPass(const Matrix44 model, Mesh* mesh, GTR::Material* 
 Shader* Renderer::chooseShader(Light* light)
 {
 	Shader* shader;
+	bool use_deferred = Application::instance->use_deferred;
 
 	if (light->cast_shadows)
 	{
 		if (GTR::Scene::instance->AA_shadows)
 		{
-			shader = Shader::Get("phongAAShadows");//no shader? then nothing to render
+			if (use_deferred)
+				shader = Shader::Get("deferredPhongAAShadows");
+			else
+				shader = Shader::Get("phongAAShadows");
 			enableShader(shader);
 		}
 		else //the shader without AA is so much simple
 		{
-			shader = Shader::Get("phongShadows");//no shader? then nothing to render
+			if (use_deferred)
+				shader = Shader::Get("deferredPhongShadows");
+			else
+				shader = Shader::Get("phongShadows");
 			enableShader(shader);
 		}
 
@@ -477,7 +501,10 @@ Shader* Renderer::chooseShader(Light* light)
 	}
 	else
 	{
-		shader = Shader::Get("phong");
+		if (use_deferred)
+			shader = Shader::Get("deferredPhong");
+		else
+			shader = Shader::Get("phong");
 		//no shader? then nothing to render
 		enableShader(shader);
 		light->setLightUniforms(shader);

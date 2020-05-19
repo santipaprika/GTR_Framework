@@ -9,6 +9,9 @@ phongShadows basic.vs phongShadows.fs
 phongAAShadows basic.vs phongAAShadows.fs
 gbuffers basic.vs gbuffers.fs
 deferred quad.vs deferred.fs
+deferredPhong quad.vs deferredPhong.fs
+deferredPhongShadows quad.vs deferredPhongShadows.fs
+deferredPhongAAShadows quad.vs deferredPhongAAShadows.fs
 
 // --------------------------------------------------------------------------
 
@@ -755,64 +758,6 @@ float getShadowFactorPointLight()
 float getShadowFactor()	// returns if point is shadowed
 {
 	//project our 3D position to the shadowmap
-	// vec4 proj_pos = u_shadow_viewproj * vec4(v_world_position,1.0);
-
-	//from homogeneus space to clip space
-	// vec2 shadow_uv = proj_pos.xy / proj_pos.w;
-
-	//from clip space to uv space
-	// shadow_uv = shadow_uv * 0.5 + vec2(0.5);
-	
-	//adaptative bias
-	// vec3 N = normalize(v_normal);
-	// vec3 L;
-	
-	// float light_outside = 1.0; //add or not light outside the shadow map zone
-	// if(u_light_type == 0) {	//directional light
-		// L = -normalize(u_light_direction);
-		// light_outside = 1.0;
-	// }
-	// else if (u_light_type == 2){//spot
-		// L =  normalize(u_light_position - v_world_position);
-		// light_outside = 0.0;
-	// }
-	// else
-		// return getShadowFactorPointLight();
-	
-	// float NdotL = clamp(dot(N,L), 0.0, 1.0);
-	//compute the new adaptative bias
-	// float adaptative_bias = u_shadow_bias * tan(acos(NdotL));
-	// adaptative_bias = clamp(adaptative_bias, 0.0, 1.0);
-	
-	//get point depth (from -1 to 1)
-	// float real_depth = (proj_pos.z - adaptative_bias) / proj_pos.w;
-
-	//normalize from [-1..+1] to [0..+1]
-	// real_depth = real_depth * 0.5 + 0.5;
-	
-	//it is before near or behind far plane
-	// if(real_depth < 0.0 || real_depth > 1.0)
-		// return light_outside;	
-	//it is outside on the sides
-	// if(shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
-		// return light_outside;
-	
-	// float xOffset = 1.0/u_shadowmap_width;
-    // float yOffset = 1.0/u_shadowmap_height;
-
-	// float Factor = 0.0;
-
-    // for (int y = -1 ; y <= 1 ; y++) {
-        // for (int x = -1 ; x <= 1 ; x++) {
-            // vec2 Offsets = vec2(x * xOffset, y * yOffset);
-            // vec3 UVC = vec3(shadow_uv + Offsets, real_depth);
-            // Factor += texture(u_shadowmap_AA, UVC);
-        // }
-    // }
-
-    // return (0.5 + (Factor / 18.0));
-	
-	//project our 3D position to the shadowmap
 	vec4 proj_pos = u_shadow_viewproj * vec4(v_world_position, 1.0);
 
 	//from homogeneous space to clip space
@@ -982,6 +927,7 @@ vec3 getDirectionalLight(vec3 N)
 	return NdotL * u_light_color * u_light_intensity;
 }
 
+
 void main()
 {
 	vec2 uv = gl_FragCoord.xy * u_iRes.xy; //extract uvs from pixel screenpos
@@ -1000,6 +946,579 @@ void main()
 	light += getDirectionalLight(N);
 	
 	color *= light;
+	
+	FragColor = vec4(color, 1.0);
+}
+
+
+\deferredPhong.fs
+
+#version 330 core
+
+uniform sampler2D u_color_texture;
+uniform sampler2D u_normal_texture;
+uniform sampler2D u_extra_texture;
+uniform sampler2D u_depth_texture;
+uniform mat4 u_inverse_viewprojection;
+uniform vec2 u_iRes;
+
+uniform vec3 u_light_color;
+uniform int u_light_type;
+uniform vec3 u_light_direction;
+uniform vec3 u_light_position;
+uniform float u_light_maxdist;
+uniform float u_light_intensity;
+uniform float u_light_spotCosineCutoff;
+uniform float u_light_spotExponent;
+
+out vec4 FragColor;
+
+float getAttenuation(vec3 world_position)
+{	
+	//compute distance
+	float light_distance = length(u_light_position - world_position);
+
+	//compute a linear attenuation factor
+	float att_factor = u_light_maxdist - light_distance;
+
+	//normalize factor
+	att_factor /= u_light_maxdist;
+
+	//ignore negative values
+	att_factor = max( att_factor, 0.0 );
+	
+	//quadratic att factor
+	att_factor *= att_factor;
+
+	//apply to amount of light
+	return att_factor;
+}
+
+vec3 getDirectionalLight(vec3 N)
+{
+	//if the light is a directional light the light vector is the same for all pixels
+	vec3 L = normalize(-u_light_direction);	//light vector goes in opposite direction
+		
+	//compute how much is aligned
+	float NdotL = dot(N,L);
+
+	//light cannot be negative (but the dot product can)
+	NdotL = clamp( NdotL, 0.0, 1.0 );
+	
+	return NdotL * u_light_color * u_light_intensity;
+}
+
+vec3 computeLight(vec3 light, vec3 normal, vec3 world_position)
+{
+	//very important to normalize as they come interpolated so normalization is lost
+	vec3 N = normalize(normal);
+	
+	if( u_light_type == 0 ) {	//directional  light
+		//store the amount of diffuse light
+		return getDirectionalLight(N);
+	}	
+	else //point and spot light
+	{
+		//light vector
+		vec3 L = normalize(u_light_position - world_position);
+		
+		//compute how much is aligned
+		float NdotL = dot(N,L);
+		
+		//light cannot be negative (but the dot product can)
+		NdotL = clamp( NdotL, 0.0, 1.0 );
+		light += (NdotL * u_light_color) * getAttenuation(world_position);
+		
+		if (u_light_type == 1)	{//point light
+			return light * u_light_intensity;
+		}	
+		else	//spot light
+		{
+			vec3 D = normalize(u_light_direction);
+			float spotCosine = dot(D,-L);
+			if (spotCosine >= u_light_spotCosineCutoff)
+				return light * pow(spotCosine,u_light_spotExponent) * u_light_intensity;
+			else return vec3(0.0);
+		}
+	}
+}
+
+void main()
+{
+	vec2 uv = gl_FragCoord.xy * u_iRes.xy; //extract uvs from pixel screenpos
+	vec3 color = texture( u_color_texture, uv ).xyz;
+	
+	//normals must be converted from 0..1 to -1..+1
+	vec3 N = texture( u_normal_texture, uv ).xyz * 2.0 - 1.0;
+	N = normalize(N); //always normalize in case of data loss
+	//reconstruct world position from depth and inv. viewproj
+	float depth = texture( u_depth_texture, uv ).x;
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+
+	//here we can store the total amount of light
+	vec3 light = vec3(0.0);
+
+	//function that returns the light using phong
+	light = computeLight(light, N, worldpos);
+	
+	//apply the light to the final pixel color
+	color.xyz *= light;
+	
+	//emissive
+	//color.xyz += texture2D(u_emissive_texture, uv * u_tiles_number).xyz;
+	FragColor = vec4(color, 1.0);
+	return;
+	
+}
+
+
+
+\deferredPhongShadows.fs
+
+#version 330 core
+
+uniform sampler2D u_color_texture;
+uniform sampler2D u_normal_texture;
+uniform sampler2D u_extra_texture;
+uniform sampler2D u_depth_texture;
+uniform mat4 u_inverse_viewprojection;
+uniform vec2 u_iRes;
+
+uniform vec3 u_light_color;
+uniform int u_light_type;
+uniform vec3 u_light_direction;
+uniform vec3 u_light_position;
+uniform float u_light_maxdist;
+uniform float u_light_intensity;
+uniform float u_light_spotCosineCutoff;
+uniform float u_light_spotExponent;
+
+uniform sampler2D u_shadowmap;
+uniform mat4 u_shadow_viewproj;
+uniform float u_shadow_bias;
+
+#define NUM_FACES 6
+uniform mat4 u_shadowmap_viewprojs[6];
+
+out vec4 FragColor;
+
+float getAttenuation(vec3 world_position)
+{	
+	//compute distance
+	float light_distance = length(u_light_position - world_position);
+
+	//compute a linear attenuation factor
+	float att_factor = u_light_maxdist - light_distance;
+
+	//normalize factor
+	att_factor /= u_light_maxdist;
+
+	//ignore negative values
+	att_factor = max( att_factor, 0.0 );
+	
+	//quadratic att factor
+	att_factor *= att_factor;
+
+	//apply to amount of light
+	return att_factor;
+}
+
+vec3 getDirectionalLight(vec3 N)
+{
+	//if the light is a directional light the light vector is the same for all pixels
+	vec3 L = normalize(-u_light_direction);	//light vector goes in opposite direction
+		
+	//compute how much is aligned
+	float NdotL = dot(N,L);
+
+	//light cannot be negative (but the dot product can)
+	NdotL = clamp( NdotL, 0.0, 1.0 );
+	
+	return NdotL * u_light_color * u_light_intensity;
+}
+
+vec3 computeLight(vec3 light, vec3 normal, vec3 world_position)
+{
+	//very important to normalize as they come interpolated so normalization is lost
+	vec3 N = normalize(normal);
+	
+	if( u_light_type == 0 ) {	//directional  light
+		//store the amount of diffuse light
+		return getDirectionalLight(N);
+	}	
+	else //point and spot light
+	{
+		//light vector
+		vec3 L = normalize(u_light_position - world_position);
+		
+		//compute how much is aligned
+		float NdotL = dot(N,L);
+		
+		//light cannot be negative (but the dot product can)
+		NdotL = clamp( NdotL, 0.0, 1.0 );
+		light += (NdotL * u_light_color) * getAttenuation(world_position);
+		
+		if (u_light_type == 1)	{//point light
+			return light * u_light_intensity;
+		}	
+		else	//spot light
+		{
+			vec3 D = normalize(u_light_direction);
+			float spotCosine = dot(D,-L);
+			if (spotCosine >= u_light_spotCosineCutoff)
+				return light * pow(spotCosine,u_light_spotExponent) * u_light_intensity;
+			else return vec3(0.0);
+		}
+	}
+}
+
+bool getShadowFactorPointLight(vec3 world_position)
+{
+	const float i_offset = 1.0 / 6.0;
+	for (int i = 0; i < 6; i++) {
+		
+		mat4 shadowmap_viewproj = mat4(1.0);
+		vec4 proj_pos = u_shadowmap_viewprojs[i] * vec4(world_position,1.0);
+		vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+		shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+		//it is outside on the sides, try next face
+		if(shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
+			continue;
+
+		shadow_uv.x *= i_offset;
+		shadow_uv.x += i_offset * float(i);
+		
+		float real_depth = (proj_pos.z - u_shadow_bias) / proj_pos.w;
+		real_depth = real_depth * 0.5 + 0.5;
+		
+		float shadow_depth = texture2D(u_shadowmap, shadow_uv).x;
+
+		if(real_depth < 0.0 || real_depth > 1.0)
+			return false;
+		
+		if( shadow_depth < real_depth )
+			return false;
+
+		break;
+	}
+	
+	return true;
+	
+}
+
+bool isShadowed(vec3 world_position, vec3 normal)	// returns if point is shadowed
+{
+	//project our 3D position to the shadowmap
+	vec4 proj_pos = u_shadow_viewproj * vec4(world_position,1.0);
+
+	//from homogeneus space to clip space
+	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+
+	//from clip space to uv space
+	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+	
+	//adaptative bias
+	vec3 N = normalize(normal);
+	vec3 L;
+	
+	bool dark_outside; //add or not light outside the shadow map zone
+	if(u_light_type == 0) {	//directional light
+		L = -normalize(u_light_direction);
+		dark_outside = false;
+	}
+	else if (u_light_type == 2){//spot
+		L =  normalize(u_light_position - world_position);
+		dark_outside = true;
+	}
+	else
+		return !getShadowFactorPointLight(world_position);
+
+	float NdotL = clamp(dot(N,L), 0.0, 1.0);
+	//compute the new adaptative bias
+	float adaptative_bias = u_shadow_bias * tan(acos(NdotL));
+	adaptative_bias = clamp(adaptative_bias, 0.0, 1.0);
+	
+	//get point depth (from -1 to 1)
+	float real_depth = (proj_pos.z - adaptative_bias) / proj_pos.w;
+
+	//normalize from [-1..+1] to [0..+1]
+	real_depth = real_depth * 0.5 + 0.5;
+	
+	//it is before near or behind far plane
+	if(real_depth < 0.0 || real_depth > 1.0)
+		return dark_outside;	
+	//it is outside on the sides
+	if(shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
+		return dark_outside;
+	
+	//read depth from depth buffer in [0..+1]
+	float shadow_depth = texture2D(u_shadowmap, shadow_uv).x;
+	
+	if( shadow_depth < real_depth )
+		return true;
+	
+	return false;
+}
+
+void main()
+{
+	vec2 uv = gl_FragCoord.xy * u_iRes.xy; //extract uvs from pixel screenpos
+	vec3 color = texture( u_color_texture, uv ).xyz;
+	
+	//normals must be converted from 0..1 to -1..+1
+	vec3 N = texture( u_normal_texture, uv ).xyz * 2.0 - 1.0;
+	N = normalize(N); //always normalize in case of data loss
+	//reconstruct world position from depth and inv. viewproj
+	float depth = texture( u_depth_texture, uv ).x;
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+
+	//here we can store the total amount of light
+	vec3 light = vec3(0.0);
+	
+	//check if it is in shadow or not
+	if (!isShadowed(worldpos, N))
+		light += computeLight(light, N, worldpos); //function that returns the light using phong
+
+	//apply the light to the final pixel color
+	color.xyz *= light;
+	
+	FragColor = vec4(color, 1.0);
+}
+
+
+
+\deferredPhongAAShadows.fs
+
+#version 330 core
+
+uniform sampler2D u_color_texture;
+uniform sampler2D u_normal_texture;
+uniform sampler2D u_extra_texture;
+uniform sampler2D u_depth_texture;
+uniform mat4 u_inverse_viewprojection;
+uniform vec2 u_iRes;
+
+uniform vec3 u_light_color;
+uniform int u_light_type;
+uniform vec3 u_light_direction;
+uniform vec3 u_light_position;
+uniform float u_light_maxdist;
+uniform float u_light_intensity;
+uniform float u_light_spotCosineCutoff;
+uniform float u_light_spotExponent;
+
+uniform sampler2DShadow u_shadowmap_AA;
+uniform sampler2D u_shadowmap;
+uniform mat4 u_shadow_viewproj;
+uniform float u_shadow_bias;
+
+uniform float u_shadowmap_width;
+uniform float u_shadowmap_height;
+
+#define NUM_FACES 6
+uniform mat4 u_shadowmap_viewprojs[6];
+
+out vec4 FragColor;
+
+float getAttenuation(vec3 world_position)
+{	
+	//compute distance
+	float light_distance = length(u_light_position - world_position);
+
+	//compute a linear attenuation factor
+	float att_factor = u_light_maxdist - light_distance;
+
+	//normalize factor
+	att_factor /= u_light_maxdist;
+
+	//ignore negative values
+	att_factor = max( att_factor, 0.0 );
+	
+	//quadratic att factor
+	att_factor *= att_factor;
+
+	//apply to amount of light
+	return att_factor;
+}
+
+vec3 getDirectionalLight(vec3 N)
+{
+	//if the light is a directional light the light vector is the same for all pixels
+	vec3 L = normalize(-u_light_direction);	//light vector goes in opposite direction
+		
+	//compute how much is aligned
+	float NdotL = dot(N,L);
+
+	//light cannot be negative (but the dot product can)
+	NdotL = clamp( NdotL, 0.0, 1.0 );
+	
+	return NdotL * u_light_color * u_light_intensity;
+}
+
+vec3 computeLight(vec3 light, vec3 normal, vec3 world_position)
+{
+	//very important to normalize as they come interpolated so normalization is lost
+	vec3 N = normalize(normal);
+	
+	if( u_light_type == 0 ) {	//directional  light
+		//store the amount of diffuse light
+		return getDirectionalLight(N);
+	}	
+	else //point and spot light
+	{
+		//light vector
+		vec3 L = normalize(u_light_position - world_position);
+		
+		//compute how much is aligned
+		float NdotL = dot(N,L);
+		
+		//light cannot be negative (but the dot product can)
+		NdotL = clamp( NdotL, 0.0, 1.0 );
+		light += (NdotL * u_light_color) * getAttenuation(world_position);
+		
+		if (u_light_type == 1)	{//point light
+			return light * u_light_intensity;
+		}	
+		else	//spot light
+		{
+			vec3 D = normalize(u_light_direction);
+			float spotCosine = dot(D,-L);
+			if (spotCosine >= u_light_spotCosineCutoff)
+				return light * pow(spotCosine,u_light_spotExponent) * u_light_intensity;
+			else return vec3(0.0);
+		}
+	}
+}
+
+float getShadowFactorPointLight(vec3 world_position)
+{
+	const float i_offset = 1.0 / 6.0;
+	for (int i = 0; i < 6; i++) {
+		
+		mat4 shadowmap_viewproj = mat4(1.0);
+		vec4 proj_pos = u_shadowmap_viewprojs[i] * vec4(world_position,1.0);
+		vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+		shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+		//it is outside on the sides, try next face
+		if(shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
+			continue;
+
+		shadow_uv.x *= i_offset;
+		shadow_uv.x += i_offset * float(i);
+		
+		float real_depth = (proj_pos.z - u_shadow_bias) / proj_pos.w;
+		real_depth = real_depth * 0.5 + 0.5;
+		
+		float shadow_depth = texture2D(u_shadowmap, shadow_uv).x;
+
+		if(real_depth < 0.0 || real_depth > 1.0)
+			return 0.0;
+		
+		if( shadow_depth > real_depth )
+			return 1.0;
+		
+		float xOffset = 1.0/u_shadowmap_width;
+		float yOffset = 1.0/u_shadowmap_height;
+
+		float Factor = 0.0;
+
+		for (int y = -1 ; y <= 1 ; y++) {
+			for (int x = -1 ; x <= 1 ; x++) {
+				vec2 Offsets = vec2(x * xOffset, y * yOffset);
+				vec3 UVC = vec3(shadow_uv + Offsets, real_depth);
+				Factor += texture(u_shadowmap_AA, UVC);
+			}
+		}
+
+		return (0.5 + (Factor / 18.0));
+	}
+	
+	//return 1.0;
+	
+}
+
+float getShadowFactor(vec3 world_position, vec3 normal)	// returns if point is shadowed
+{
+	//project our 3D position to the shadowmap
+	vec4 proj_pos = u_shadow_viewproj * vec4(world_position, 1.0);
+
+	//from homogeneous space to clip space
+	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+
+	//from clip space to uv space
+	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+
+	//adaptative bias
+	vec3 N = normalize(normal);
+	vec3 L;
+	if(u_light_type == 0) //directional light
+		L = -normalize(u_light_direction);
+	else if (u_light_type == 1)
+		return getShadowFactorPointLight(world_position);
+	else //spot
+		L =  normalize(u_light_position - world_position);
+		
+	float NdotL = clamp(dot(N,L), 0.0, 1.0);
+	//compute the new adaptative bias
+	float adaptative_bias = u_shadow_bias * tan(acos(NdotL));
+	adaptative_bias = clamp(adaptative_bias, 0.0, 1.0);
+
+	//get point depth (from -1 to 1)
+	float real_depth = (proj_pos.z - u_shadow_bias) / proj_pos.w;
+
+	//normalize from [-1..+1] to [0..+1] (z)
+	real_depth = real_depth * 0.5 + 0.5;
+
+	//it is outside on the sides
+	if(	shadow_uv.x < 0.0 || shadow_uv.x > 1.0 ||
+	shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
+			return 1.0;
+	//it is before near or behind far plane
+	if(real_depth < 0.0 || real_depth > 1.0)
+		return 1.0;
+	
+	float xOffset = 1.0/u_shadowmap_width;
+    float yOffset = 1.0/u_shadowmap_height;
+
+	float Factor = 0.0;
+
+    for (int y = -1 ; y <= 1 ; y++) {
+        for (int x = -1 ; x <= 1 ; x++) {
+            vec2 Offsets = vec2(x * xOffset, y * yOffset);
+            vec3 UVC = vec3(shadow_uv + Offsets, real_depth);
+            Factor += texture(u_shadowmap_AA, UVC);
+        }
+    }
+
+    return (0.5 + (Factor / 18.0));
+}
+
+void main()
+{
+	vec2 uv = gl_FragCoord.xy * u_iRes.xy; //extract uvs from pixel screenpos
+	vec3 color = texture( u_color_texture, uv ).xyz;
+	
+	//normals must be converted from 0..1 to -1..+1
+	vec3 N = texture( u_normal_texture, uv ).xyz * 2.0 - 1.0;
+	N = normalize(N); //always normalize in case of data loss
+	//reconstruct world position from depth and inv. viewproj
+	float depth = texture( u_depth_texture, uv ).x;
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+
+	//here we can store the total amount of light
+	vec3 light = vec3(0.0);
+	
+	float shadowFact = getShadowFactor(worldpos, N);
+	light += shadowFact * computeLight(light, N, worldpos); //function that returns the light using phong
+
+	//apply the light to the final pixel color
+	color.xyz *= light;
 	
 	FragColor = vec4(color, 1.0);
 }

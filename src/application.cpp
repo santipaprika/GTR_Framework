@@ -101,7 +101,7 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	scene->AddEntity(new GTR::PrefabEntity(car));
 
 	GTR::Light* sun = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0), Vector3(-0.3, -0.6, -0.1), "Sun", GTR::DIRECTIONAL);
-	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(0, 380, 0), Vector3(0, -0.9, 0.1), "Point", GTR::SPOT);
+	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(0, 380, 0), Vector3(0, -0.9, 0.1), "Point", GTR::POINT);
 	light1->cast_shadows = true;
 	light1->intensity = 20;
 	light1->updateLightCamera();
@@ -184,6 +184,7 @@ void Application::render(void)
 {
 	GTR::Scene* scene = GTR::Scene::instance;
 	if (use_deferred) {
+		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
 		renderer->renderGBuffers(scene, camera);
 		renderer->renderIlluminationToBuffers(camera);
 

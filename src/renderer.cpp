@@ -43,7 +43,7 @@ void Renderer::renderGBuffers(Scene* scene, Camera* camera)
 	gbuffers_fbo->enableAllBuffers();
 
 	//render everything 
-	renderScene(scene, camera);
+	renderScene(scene, camera);	// this will call renderToGBuffers for every mesh in the camera frustrum (scene)
 
 	//stop rendering to the gbuffers
 	gbuffers_fbo->unbind();
@@ -95,7 +95,7 @@ void Renderer::showGBuffers()
 	application->gbuffers_fbo->depth_texture->toViewport(shader);
 }
 
-void Renderer::renderIlluminationToBuffers(Camera* camera)
+void Renderer::renderIlluminationToBuffer(Camera* camera)
 {
 	FBO* illumination_fbo = Application::instance->illumination_fbo;
 	FBO* gbuffers_fbo = Application::instance->gbuffers_fbo;
@@ -157,17 +157,14 @@ void Renderer::renderIlluminationToBuffers(Camera* camera)
 	bool is_first_pass = true;
 	for (auto light : scene_lights)		// MULTI PASS
 	{
-		// skip iteration if light is far from mesh && light is point light && is not first pass (bc first pass must be done to paint the mesh with ambient light))
-		//if (!mesh->testSphereCollision(model, light->model.getTranslation(), light->max_distance, Vector3(0, 0, 0), Vector3(0, 0, 0)) && light->light_type == GTR::POINT && !is_first_pass)
-			//continue;
-
-		//if (!light->camera->testBoxInFrustum(mesh->box.center, mesh->box.halfsize) && light->light_type == GTR::SPOT && !is_first_pass)
-			//continue;*/
-
-		
-		//manageBlendingAndCulling(material, true, is_first_pass);
-
-		Shader* shader = chooseShader(light);
+		Shader* shader;
+		if (light->light_type == GTR::DIRECTIONAL && Scene::instance->use_geometry_on_deferred) {
+			Scene::instance->use_geometry_on_deferred = false;
+			shader = chooseShader(light);
+			Scene::instance->use_geometry_on_deferred = true;
+		}
+		else
+			shader = chooseShader(light);	//this sets light uniforms too
 
 		//pass the gbuffers to the shader
 		shader->setUniform("u_color_texture", gbuffers_fbo->color_textures[0], 0);
@@ -183,37 +180,111 @@ void Renderer::renderIlluminationToBuffers(Camera* camera)
 		//pass the inverse window resolution, this may be useful
 		shader->setUniform("u_iRes", Vector2(1.0 / (float)Application::instance->window_width, 1.0 / (float)Application::instance->window_height));
 
-		quad->render(GL_TRIANGLES);
+		if (Scene::instance->use_geometry_on_deferred && light->light_type != GTR::DIRECTIONAL)
+		{
+			Mesh* light_geometry;
+
+			switch (light->light_type)
+			{
+			case GTR::POINT:
+				//we can use a sphere mesh for point lights
+				light_geometry = Mesh::Get("data/meshes/sphere.obj");
+				break;
+			case GTR::SPOT:
+				light_geometry = Mesh::Get("data/meshes/sphere.obj");
+				break;
+			}
+
+			//basic.vs will need the model and the viewproj of the camera
+			shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+
+			//we must translate the model to the center of the light
+			Matrix44 m;
+			Vector3 light_pos = light->model.getTranslation();
+			m.setTranslation(light_pos.x, light_pos.y, light_pos.z);
+			//and scale it according to the max_distance of the light
+			m.scale(light->max_distance, light->max_distance, light->max_distance);
+
+			//pass the model to the shader to render the sphere
+			shader->setUniform("u_model", m);
+
+			//render only the backfacing triangles of the sphere
+			glEnable(GL_CULL_FACE);
+			glFrontFace(GL_CW);
+
+			if (scene->show_deferred_light_geometry) {
+				glDisable(GL_DEPTH_TEST);
+				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+				shader->setUniform("u_color", Vector4(light->color, 0.5));
+			}
+
+			//and render the sphere
+			light_geometry->render(GL_TRIANGLES);
+
+			glFrontFace(GL_CCW);
+		}
+		else
+			quad->render(GL_TRIANGLES);
 
 		shader->disable();
-
-		//we need a shader specially for this task, lets call it "deferred"
-		
-
-	
-		//glDisable(GL_DEPTH_TEST);
-
-		////render a fullscreen quad
-		//quad->render(GL_TRIANGLES);
-
-		//shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
-		//shader->setUniform("u_camera_position", camera->eye);
-		//shader->setUniform("u_model", model);
-
-		//material->setUniforms(shader, is_first_pass);
-
-		//shader->setUniform("u_ambient_light", Scene::instance->ambient_light * is_first_pass);
-
-		//mesh->render(GL_TRIANGLES);
-
-		//is_first_pass = false;
 	}
 
 	illumination_fbo->unbind();
 	setDefaultGLFlags();
 }
 
-//MULTIPASS
+//FORWARD
+//render all the scene to viewport
+void Renderer::renderSceneForward(GTR::Scene* scene, Camera* camera)
+{
+	Application* application = Application::instance;
+	application->rendering_shadowmap = false;
+
+	//be sure no errors present in opengl before start
+	checkGLErrors();
+
+	//set the clear color 
+	Vector4 bg_color = scene->bg_color;
+	glClearColor(bg_color.x, bg_color.y, bg_color.z, bg_color.w);
+
+	//set the camera as default (used by some functions in the framework)
+	camera->enable();
+
+	setDefaultGLFlags();
+
+	if (application->render_wireframe)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	else
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+	renderScene(scene, camera);
+
+	if (application->render_grid)
+		drawGrid();
+}
+
+void Renderer::manageBlendingAndCulling(GTR::Material* material, bool rendering_light, bool is_first_pass)
+{
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	if (material->alpha_mode != GTR::BLEND && (is_first_pass || !rendering_light))
+		glDisable(GL_BLEND);
+
+	//select the blending
+	if (!is_first_pass)
+	{
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE); 
+		glDepthFunc(GL_LEQUAL);
+	}
+
+	//select if render both sides of the triangles
+	if (material->two_sided)
+		glDisable(GL_CULL_FACE);
+	else
+		glEnable(GL_CULL_FACE);
+	assert(glGetError() == GL_NO_ERROR);
+}
 
 std::vector<Light*> Renderer::renderSceneShadowmaps(GTR::Scene* scene)
 {
@@ -259,35 +330,6 @@ std::vector<Light*> Renderer::renderSceneShadowmaps(GTR::Scene* scene)
 	Application::instance->rendering_shadowmap = false;
 
 	return shadow_casting_lights;
-}
-
-//render all the scene to viewport
-void Renderer::renderSceneToScreen(GTR::Scene* scene, Camera* camera)
-{
-	Application* application = Application::instance;
-	application->rendering_shadowmap = false;
-
-	//be sure no errors present in opengl before start
-	checkGLErrors();
-
-	//set the clear color 
-	Vector4 bg_color = scene->bg_color;
-	glClearColor(bg_color.x, bg_color.y, bg_color.z, bg_color.w);
-
-	//set the camera as default (used by some functions in the framework)
-	camera->enable();
-
-	setDefaultGLFlags();
-
-	if (application->render_wireframe)
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	else
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-	renderScene(scene, camera);
-
-	if (application->render_grid)
-		drawGrid();
 }
 
 void Renderer::renderPointShadowmap(Light* light)
@@ -392,7 +434,7 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 
 	if (Application::instance->rendering_shadowmap)
 		renderSimple(model, mesh, material, camera);
-	else if (Application::instance->use_deferred)
+	else if (Application::instance->current_pipeline == Application::DEFERRED)
 		renderToGBuffers(model, mesh, material, camera);
 	else {
 		if (scene_lights.empty())
@@ -475,14 +517,25 @@ void Renderer::renderMultiPass(const Matrix44 model, Mesh* mesh, GTR::Material* 
 Shader* Renderer::chooseShader(Light* light)
 {
 	Shader* shader;
-	bool use_deferred = Application::instance->use_deferred;
+	bool use_deferred = Application::instance->current_pipeline == Application::DEFERRED;
+	Scene* scene = Scene::instance;
 
 	if (light->cast_shadows)
 	{
-		if (GTR::Scene::instance->AA_shadows)
+		if (scene->AA_shadows)
 		{
 			if (use_deferred)
-				shader = Shader::Get("deferredPhongAAShadows");
+			{
+				if (scene->use_geometry_on_deferred)
+				{
+					if (scene->show_deferred_light_geometry)
+						shader = Shader::Get("flat");
+					else
+						shader = Shader::Get("deferredPhongAAShadowsGeometry");
+				}
+				else
+					shader = Shader::Get("deferredPhongAAShadows");
+			}
 			else
 				shader = Shader::Get("phongAAShadows");
 			enableShader(shader);
@@ -490,7 +543,17 @@ Shader* Renderer::chooseShader(Light* light)
 		else //the shader without AA is so much simple
 		{
 			if (use_deferred)
-				shader = Shader::Get("deferredPhongShadows");
+			{
+				if (scene->use_geometry_on_deferred)
+				{
+					if (scene->show_deferred_light_geometry)
+						shader = Shader::Get("flat");
+					else
+						shader = Shader::Get("deferredPhongShadowsGeometry");
+				}
+				else
+					shader = Shader::Get("deferredPhongShadows");
+			}
 			else
 				shader = Shader::Get("phongShadows");
 			enableShader(shader);
@@ -502,7 +565,17 @@ Shader* Renderer::chooseShader(Light* light)
 	else
 	{
 		if (use_deferred)
-			shader = Shader::Get("deferredPhong");
+		{
+			if (scene->use_geometry_on_deferred)
+			{
+				if (scene->show_deferred_light_geometry)
+					shader = Shader::Get("flat");
+				else
+					shader = Shader::Get("deferredPhongGeometry");
+			}
+			else
+				shader = Shader::Get("deferredPhong");
+		}
 		else
 			shader = Shader::Get("phong");
 		//no shader? then nothing to render
@@ -580,26 +653,4 @@ void Renderer::setDefaultGLFlags()
 	glFrontFace(GL_CCW); //instead of GL_CCW
 }
 
-void Renderer::manageBlendingAndCulling(GTR::Material* material, bool rendering_light, bool is_first_pass)
-{
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-	if (material->alpha_mode != GTR::BLEND && (is_first_pass || !rendering_light))
-		glDisable(GL_BLEND);
-
-	//select the blending
-	if (!is_first_pass)
-	{
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE); 
-		glDepthFunc(GL_LEQUAL);
-	}
-
-	//select if render both sides of the triangles
-	if (material->two_sided)
-		glDisable(GL_CULL_FACE);
-	else
-		glEnable(GL_CULL_FACE);
-	assert(glGetError() == GL_NO_ERROR);
-}
 

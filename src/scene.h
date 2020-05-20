@@ -28,6 +28,9 @@ namespace GTR {
 		//Flags
 		bool reverse_shadowmap; //Shadows flags
 		bool AA_shadows;
+		bool show_gbuffers;
+		bool use_geometry_on_deferred;
+		bool show_deferred_light_geometry;
 
 		//ctor
 		Scene();

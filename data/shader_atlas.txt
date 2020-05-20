@@ -9,9 +9,14 @@ phongShadows basic.vs phongShadows.fs
 phongAAShadows basic.vs phongAAShadows.fs
 gbuffers basic.vs gbuffers.fs
 deferred quad.vs deferred.fs
+// lights pass
 deferredPhong quad.vs deferredPhong.fs
 deferredPhongShadows quad.vs deferredPhongShadows.fs
 deferredPhongAAShadows quad.vs deferredPhongAAShadows.fs
+// lights pass with geometry
+deferredPhongGeometry basic.vs deferredPhong.fs
+deferredPhongShadowsGeometry basic.vs deferredPhongShadows.fs
+deferredPhongAAShadowsGeometry basic.vs deferredPhongAAShadows.fs
 
 // --------------------------------------------------------------------------
 
@@ -930,7 +935,7 @@ vec3 getDirectionalLight(vec3 N)
 
 void main()
 {
-	vec2 uv = gl_FragCoord.xy * u_iRes.xy; //extract uvs from pixel screenpos
+	vec2 uv = (gl_FragCoord.xy + vec2(0.5)) * u_iRes.xy; //extract uvs from pixel screenpos
 	vec3 color = texture( u_color_texture, uv ).xyz;
 	//normals must be converted from 0..1 to -1..+1
 	vec3 N = texture( u_normal_texture, uv ).xyz * 2.0 - 1.0;
@@ -1045,7 +1050,7 @@ vec3 computeLight(vec3 light, vec3 normal, vec3 world_position)
 
 void main()
 {
-	vec2 uv = gl_FragCoord.xy * u_iRes.xy; //extract uvs from pixel screenpos
+	vec2 uv = (gl_FragCoord.xy + vec2(0.5)) * u_iRes.xy; //extract uvs from pixel screenpos
 	vec3 color = texture( u_color_texture, uv ).xyz;
 	
 	//normals must be converted from 0..1 to -1..+1
@@ -1264,7 +1269,7 @@ bool isShadowed(vec3 world_position, vec3 normal)	// returns if point is shadowe
 
 void main()
 {
-	vec2 uv = gl_FragCoord.xy * u_iRes.xy; //extract uvs from pixel screenpos
+	vec2 uv = (gl_FragCoord.xy + vec2(0.5)) * u_iRes.xy; //extract uvs from pixel screenpos
 	vec3 color = texture( u_color_texture, uv ).xyz;
 	
 	//normals must be converted from 0..1 to -1..+1
@@ -1444,42 +1449,47 @@ float getShadowFactorPointLight(vec3 world_position)
 float getShadowFactor(vec3 world_position, vec3 normal)	// returns if point is shadowed
 {
 	//project our 3D position to the shadowmap
-	vec4 proj_pos = u_shadow_viewproj * vec4(world_position, 1.0);
+	vec4 proj_pos = u_shadow_viewproj * vec4(world_position,1.0);
 
-	//from homogeneous space to clip space
+	//from homogeneus space to clip space
 	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
 
 	//from clip space to uv space
 	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
-
+	
 	//adaptative bias
 	vec3 N = normalize(normal);
 	vec3 L;
-	if(u_light_type == 0) //directional light
+	
+	float light_outside = 1.0; //add or not light outside the shadow map zone
+	if(u_light_type == 0) {	//directional light
 		L = -normalize(u_light_direction);
-	else if (u_light_type == 1)
-		return getShadowFactorPointLight(world_position);
-	else //spot
+		light_outside = 1.0;
+	}
+	else if (u_light_type == 2){//spot
 		L =  normalize(u_light_position - world_position);
-		
+		light_outside = 0.0;
+	}
+	else
+		return getShadowFactorPointLight(world_position);
+	
 	float NdotL = clamp(dot(N,L), 0.0, 1.0);
 	//compute the new adaptative bias
 	float adaptative_bias = u_shadow_bias * tan(acos(NdotL));
-	adaptative_bias = clamp(adaptative_bias, 0.0, 1.0);
-
+	//adaptative_bias = clamp(adaptative_bias, 0.0, 1.0);
+	
 	//get point depth (from -1 to 1)
-	float real_depth = (proj_pos.z - u_shadow_bias) / proj_pos.w;
+	float real_depth = (proj_pos.z - adaptative_bias) / proj_pos.w;
 
-	//normalize from [-1..+1] to [0..+1] (z)
+	//normalize from [-1..+1] to [0..+1]
 	real_depth = real_depth * 0.5 + 0.5;
-
-	//it is outside on the sides
-	if(	shadow_uv.x < 0.0 || shadow_uv.x > 1.0 ||
-	shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
-			return 1.0;
+	
 	//it is before near or behind far plane
 	if(real_depth < 0.0 || real_depth > 1.0)
-		return 1.0;
+		return light_outside;	
+	//it is outside on the sides
+	if(shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
+		return light_outside;
 	
 	float xOffset = 1.0/u_shadowmap_width;
     float yOffset = 1.0/u_shadowmap_height;
@@ -1495,11 +1505,13 @@ float getShadowFactor(vec3 world_position, vec3 normal)	// returns if point is s
     }
 
     return (0.5 + (Factor / 18.0));
+	
+	
 }
 
 void main()
 {
-	vec2 uv = gl_FragCoord.xy * u_iRes.xy; //extract uvs from pixel screenpos
+	vec2 uv = (gl_FragCoord.xy + vec2(0.5)) * u_iRes.xy; //extract uvs from pixel screenpos
 	vec3 color = texture( u_color_texture, uv ).xyz;
 	
 	//normals must be converted from 0..1 to -1..+1

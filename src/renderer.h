@@ -23,15 +23,19 @@ namespace GTR {
 
 		void showGBuffers();
 
-		void renderIlluminationToBuffers(Camera* camera);
+		void renderIlluminationToBuffer(Camera* camera);
 
 		// MULTIPASS
+
+		//to render the scene to viewport
+		void renderSceneForward(GTR::Scene* scene, Camera* camera);
+
+		//manages blendign
+		void manageBlendingAndCulling(GTR::Material* material, bool rendering_light, bool is_first_pass = true);
+		
 		//to render the scene to texture (shadowmap)
 		std::vector<GTR::Light*> renderSceneShadowmaps(GTR::Scene* scene);
 
-		//to render the scene to viewport
-		void renderSceneToScreen(GTR::Scene* scene, Camera* camera);
-		
 		void renderPointShadowmap(Light* light);
 
 		//to render a scene
@@ -60,8 +64,6 @@ namespace GTR {
 
 		void setDefaultGLFlags();
 
-		//manages blendign
-		void manageBlendingAndCulling(GTR::Material* material, bool rendering_light, bool is_first_pass = true);
 	};
 
 };

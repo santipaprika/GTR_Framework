@@ -43,9 +43,6 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	prefab_selected = NULL;
 	light_selected = NULL;
 
-	show_gbuffers = false;
-	show_shadowmaps = false;
-
 	//loads and compiles several shaders from one single file
     //change to "data/shader_atlas_osx.txt" if you are in XCODE
 	if(!Shader::LoadAtlas("data/shader_atlas.txt"))
@@ -57,7 +54,7 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	camera->lookAt(Vector3(-150.f, 150.0f, 250.f), Vector3(0.f, 0.0f, 0.f), Vector3(0.f, 1.f, 0.f));
 	camera->setPerspective( 45.f, window_width/(float)window_height, 1.0f, 10000.f);
 
-	use_deferred = true;
+	current_pipeline = DEFERRED;
 
 	//initialize GBuffers for deferred (create FBO)
 	gbuffers_fbo = new FBO();
@@ -87,7 +84,12 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	GTR::Node plane_node = GTR::Node();
 	plane_node.mesh = new Mesh();
 	plane_node.mesh->createPlane(2048.0);
+#ifdef _DEBUG
+	plane_node.material = new GTR::Material();
+#else
 	plane_node.material = new GTR::Material(Texture::Get("data/textures/asphalt.png"));
+#endif
+
 	plane_node.material->name = "Road";
 	plane_node.material->tiles_number = 4.4;
 
@@ -99,15 +101,24 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	GTR::Prefab* car = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
 	scene->AddEntity(new GTR::PrefabEntity(plane_prefab));
 	scene->AddEntity(new GTR::PrefabEntity(car));
+	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(300, 0, 100), Vector3(0, 45, 0)));
 
 	GTR::Light* sun = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0), Vector3(-0.3, -0.6, -0.1), "Sun", GTR::DIRECTIONAL);
+	sun->intensity = 0.3;
+
 	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(0, 380, 0), Vector3(0, -0.9, 0.1), "Point", GTR::POINT);
 	light1->cast_shadows = true;
 	light1->intensity = 20;
 	light1->updateLightCamera();
 
-	scene->AddEntity(light1);
+	GTR::Light* light2 = new GTR::Light(Color::TURQUESE, Vector3(300, 200, 0), Vector3(0, -0.7, 0.3), "Spot", GTR::SPOT);
+	light1->cast_shadows = true;
+	light1->intensity = 20;
+	light1->updateLightCamera();
+
 	scene->AddEntity(sun);
+	scene->AddEntity(light1);
+	scene->AddEntity(light2);
 
 
 	//hide the cursor
@@ -183,20 +194,23 @@ void Application::createScene()
 void Application::render(void)
 {
 	GTR::Scene* scene = GTR::Scene::instance;
-	if (use_deferred) {
+	
+	if (current_pipeline == DEFERRED) {
 		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
 		renderer->renderGBuffers(scene, camera);
-		renderer->renderIlluminationToBuffers(camera);
+		renderer->renderIlluminationToBuffer(camera);
 
 		glDisable(GL_DEPTH_TEST);
 		illumination_fbo->color_textures[0]->toViewport();
 
-		if (show_gbuffers)
+		renderer->showSceneShadowmaps(shadow_caster_lights);
+
+		if (scene->show_gbuffers)
 			renderer->showGBuffers();
 	}
 	else {	
 		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
-		renderer->renderSceneToScreen(scene, camera);
+		renderer->renderSceneForward(scene, camera);
 		renderer->showSceneShadowmaps(shadow_caster_lights);
 	}
 	
@@ -209,15 +223,14 @@ void Application::renderDebugGUI(void)
 {
 #ifndef SKIP_IMGUI //to block this code from compiling if we want
 
+	GTR::Scene* scene = GTR::Scene::instance;
+
 	//System stats
 	ImGui::Text(getGPUStats().c_str());					   // Display some text (you can use a format strings too)
 
+	const char* current_element_name = (current_pipeline >= 0 && current_pipeline < Element_COUNT) ? element_names[current_pipeline] : "Unknown";
+	ImGui::SliderInt("Rendering Pipeline", &current_pipeline, 0, Element_COUNT - 1, current_element_name);
 	ImGui::Checkbox("Wireframe", &render_wireframe);
-	ImGui::Checkbox("Deferred", &use_deferred);
-	if (use_deferred)
-		ImGui::Checkbox("Show GBuffers", &show_gbuffers);
-
-	GTR::Scene* scene = GTR::Scene::instance;
 
 	//add info to the debug panel about the camera
 	if (ImGui::TreeNode(camera, "Camera")) {

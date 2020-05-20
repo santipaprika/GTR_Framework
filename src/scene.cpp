@@ -20,8 +20,11 @@ Scene::Scene()
 	ambient_power = 1.0;
 
 	//flags
-	reverse_shadowmap = false;
+	reverse_shadowmap = true;
 	AA_shadows = true;
+	show_gbuffers = false;
+	use_geometry_on_deferred = false;
+	show_deferred_light_geometry = false;
 }
 
 void Scene::AddEntity(BaseEntity* entity)
@@ -46,6 +49,13 @@ void Scene::renderInMenu()
 	ImGui::Text("Flags:");
 	ImGui::Checkbox("Reverse Shadowmap", &reverse_shadowmap);
 	ImGui::Checkbox("Apply AntiAliasing to Shadows", &AA_shadows);
+	if (Application::instance->current_pipeline == Application::DEFERRED)
+	{
+		ImGui::Checkbox("Show GBuffers", &show_gbuffers);
+		ImGui::Checkbox("Use Geometry", &use_geometry_on_deferred);
+		if (use_geometry_on_deferred)
+			ImGui::Checkbox("Show Light Geometry", &show_deferred_light_geometry);
+	}
 
 	// info to the debug panel about the lights
 	bool node_open = ImGui::TreeNode("Lights");

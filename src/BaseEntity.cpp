@@ -133,13 +133,20 @@ void Light::setCutoffAngle(float angle_in_deg)
 
 void Light::setVisiblePrefab()
 {
-	if (light_type == DIRECTIONAL) return;
-
 	light_node = new GTR::Node();
-	if (light_type == POINT)
+
+	switch (light_type)
+	{
+	case GTR::DIRECTIONAL:
+		light_node = NULL;
+		return;
+	case GTR::POINT:
 		light_node->mesh = Mesh::Get("data/meshes/lowPoli_sphere.obj");
-	else
+		break;
+	case GTR::SPOT:
 		light_node->mesh = Mesh::Get("data/meshes/cone.obj");
+		break;
+	}
 
 	light_node->material = new GTR::Material();
 	light_node->model = model;
@@ -181,10 +188,12 @@ void Light::setShadowUniforms(Shader* shader)
 void Light::renderInMenu()
 {
 	bool changed = false;
-	bool light_type_changed = false;
 	ImGui::ColorEdit3("Light Color", (float*)&color);
 	if (ImGui::Combo("Light Type", (int*)&light_type, "DIRECTIONAL\0POINT\0SPOT", 3))
+	{
 		updateLightCamera(true);
+		setVisiblePrefab();
+	}
 	float matrixTranslation[3], matrixRotation[3], matrixScale[3];
 	Vector3 frontVector = model.frontVector();
 	ImGuizmo::DecomposeMatrixToComponents(model.m, matrixTranslation, matrixRotation, matrixScale);
@@ -215,7 +224,7 @@ void Light::renderInMenu()
 		changed |= ImGui::SliderFloat("FOV", (float*)&camera->fov, 0.0f, 180.0f);
 		break;
 	}
-
+	
 	if (frontVector.length() == 0) frontVector = Vector3(0.1, -0.9, 0.0);
 	ImGuizmo::RecomposeMatrixFromComponents(matrixTranslation, matrixRotation, matrixScale, model.m);
 	model.setFrontAndOrthonormalize(frontVector);

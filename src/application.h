@@ -32,15 +32,16 @@ public:
 	bool render_gui;
 	
 	bool rendering_shadowmap;
-	bool show_shadowmaps;
-	bool show_gbuffers;
 
 	GTR::Light* light_selected;
 	GTR::PrefabEntity* prefab_selected;
 
 	Camera* camera;
 
-	bool use_deferred;
+	enum Pipelines { FORWARD, DEFERRED, Element_COUNT };
+	const char* element_names[Element_COUNT] = { "Forward", "Deferred" };
+	int current_pipeline;
+
 	FBO* gbuffers_fbo;
 	FBO* illumination_fbo;
 

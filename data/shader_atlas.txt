@@ -935,7 +935,7 @@ vec3 getDirectionalLight(vec3 N)
 
 void main()
 {
-	vec2 uv = (gl_FragCoord.xy + vec2(0.5)) * u_iRes.xy; //extract uvs from pixel screenpos
+	vec2 uv = (gl_FragCoord.xy) * u_iRes.xy; //extract uvs from pixel screenpos
 	vec3 color = texture( u_color_texture, uv ).xyz;
 	//normals must be converted from 0..1 to -1..+1
 	vec3 N = texture( u_normal_texture, uv ).xyz * 2.0 - 1.0;
@@ -1050,7 +1050,7 @@ vec3 computeLight(vec3 light, vec3 normal, vec3 world_position)
 
 void main()
 {
-	vec2 uv = (gl_FragCoord.xy + vec2(0.5)) * u_iRes.xy; //extract uvs from pixel screenpos
+	vec2 uv = (gl_FragCoord.xy) * u_iRes.xy; //extract uvs from pixel screenpos
 	vec3 color = texture( u_color_texture, uv ).xyz;
 	
 	//normals must be converted from 0..1 to -1..+1
@@ -1269,7 +1269,7 @@ bool isShadowed(vec3 world_position, vec3 normal)	// returns if point is shadowe
 
 void main()
 {
-	vec2 uv = (gl_FragCoord.xy + vec2(0.5)) * u_iRes.xy; //extract uvs from pixel screenpos
+	vec2 uv = (gl_FragCoord.xy) * u_iRes.xy; //extract uvs from pixel screenpos
 	vec3 color = texture( u_color_texture, uv ).xyz;
 	
 	//normals must be converted from 0..1 to -1..+1
@@ -1511,7 +1511,7 @@ float getShadowFactor(vec3 world_position, vec3 normal)	// returns if point is s
 
 void main()
 {
-	vec2 uv = (gl_FragCoord.xy + vec2(0.5)) * u_iRes.xy; //extract uvs from pixel screenpos
+	vec2 uv = (gl_FragCoord.xy) * u_iRes.xy; //extract uvs from pixel screenpos
 	vec3 color = texture( u_color_texture, uv ).xyz;
 	
 	//normals must be converted from 0..1 to -1..+1

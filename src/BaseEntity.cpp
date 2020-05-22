@@ -219,7 +219,7 @@ void Light::renderInMenu()
 		break;
 	case GTR::SPOT:
 		changed |= ImGui::SliderFloat3("Direction", (float*)&frontVector[0], -1, 1);
-		changed |= ImGui::SliderFloat("Cutoff Angle", (float*)&spot_cutoff_in_deg, 0, 90);
+		changed |= ImGui::SliderFloat("Cutoff Angle", (float*)&spot_cutoff_in_deg, 5, 90);
 		changed |= ImGui::SliderFloat("Spot Exponent", (float*)&spot_exponent, 0, 100);
 		changed |= ImGui::SliderFloat("FOV", (float*)&camera->fov, 0.0f, 180.0f);
 		break;

@@ -25,6 +25,7 @@ Scene::Scene()
 	show_gbuffers = false;
 	use_geometry_on_deferred = false;
 	show_deferred_light_geometry = false;
+	forward_for_blends = false;
 }
 
 void Scene::AddEntity(BaseEntity* entity)

@@ -43,6 +43,8 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	prefab_selected = NULL;
 	light_selected = NULL;
 
+	Vector3 offset = Vector3(0, -1000, 0);
+
 	//loads and compiles several shaders from one single file
     //change to "data/shader_atlas_osx.txt" if you are in XCODE
 	if(!Shader::LoadAtlas("data/shader_atlas.txt"))
@@ -51,7 +53,7 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 
 	// Create camera
 	camera = new Camera();
-	camera->lookAt(Vector3(-150.f, 150.0f, 250.f), Vector3(0.f, 0.0f, 0.f), Vector3(0.f, 1.f, 0.f));
+	camera->lookAt(Vector3(-150.f, 150.0f, 250.f) + offset, Vector3(0.f, 0.0f, 0.f) + offset, Vector3(0.f, 1.f, 0.f));
 	camera->setPerspective( 45.f, window_width/(float)window_height, 1.0f, 10000.f);
 
 	current_pipeline = DEFERRED;
@@ -99,22 +101,23 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 
 	GTR::Scene* scene = new GTR::Scene();
 	GTR::Prefab* car = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
-	scene->AddEntity(new GTR::PrefabEntity(plane_prefab));
-	scene->AddEntity(new GTR::PrefabEntity(car));
-	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(300, 0, 100), Vector3(0, 45, 0)));
+	scene->AddEntity(new GTR::PrefabEntity(plane_prefab, offset));
+	scene->AddEntity(new GTR::PrefabEntity(car, offset));
+	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(300, 0, 100) + offset, Vector3(0, 45, 0)));
 
-	GTR::Light* sun = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0), Vector3(-0.3, -0.6, -0.1), "Sun", GTR::DIRECTIONAL);
+	GTR::Light* sun = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0) + offset, Vector3(-0.3, -0.6, -0.1), "Sun", GTR::DIRECTIONAL);
 	sun->intensity = 0.3;
+	sun->cast_shadows = false;
 
-	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(0, 380, 0), Vector3(0, -0.9, 0.1), "Point", GTR::POINT);
+	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(0, 380, 0) + offset, Vector3(0, -0.9, 0.1), "Point", GTR::POINT);
 	light1->cast_shadows = true;
 	light1->intensity = 20;
 	light1->updateLightCamera();
 
-	GTR::Light* light2 = new GTR::Light(Color::TURQUESE, Vector3(300, 200, 0), Vector3(0, -0.7, 0.3), "Spot", GTR::SPOT);
-	light1->cast_shadows = true;
-	light1->intensity = 20;
-	light1->updateLightCamera();
+	GTR::Light* light2 = new GTR::Light(Color::TURQUESE, Vector3(300, 300, 0) + offset, Vector3(0, -0.7, 0.3), "Spot", GTR::SPOT);
+	light2->cast_shadows = true;
+	light2->intensity = 20;
+	light2->updateLightCamera();
 
 	scene->AddEntity(sun);
 	scene->AddEntity(light1);
@@ -196,9 +199,15 @@ void Application::render(void)
 	GTR::Scene* scene = GTR::Scene::instance;
 	
 	if (current_pipeline == DEFERRED) {
+		scene->forward_for_blends = false;
 		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
 		renderer->renderGBuffers(scene, camera);
 		renderer->renderIlluminationToBuffer(camera);
+		scene->forward_for_blends = true;
+		renderer->renderSceneForward(scene, camera);
+
+		illumination_fbo->unbind();
+		renderer->setDefaultGLFlags();
 
 		glDisable(GL_DEPTH_TEST);
 		illumination_fbo->color_textures[0]->toViewport();
@@ -371,7 +380,7 @@ void Application::renderDebugGizmo()
 	ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
 	ImGuizmo::Manipulate(camera->view_matrix.m, camera->projection_matrix.m, mCurrentGizmoOperation, mCurrentGizmoMode, matrix.m, NULL, useSnap ? &snap.x : NULL);
 	
-	if (light_selected != NULL) {
+	if (light_selected != NULL && light_selected->light_type != GTR::DIRECTIONAL) {
 		light_selected->light_node->model = light_selected->model;
 		light_selected->light_node->model.scale(3,3,3);
 

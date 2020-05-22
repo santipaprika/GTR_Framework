@@ -3,6 +3,7 @@
 #include "input.h"
 #include "scene.h"
 #include "application.h"
+#include "utils.h"
 
 #include <cassert>
 
@@ -42,33 +43,6 @@ void PrefabEntity::renderInMenu()
 		prefab->root.renderInMenu();
 		ImGui::TreePop();
 	}
-}
-
-bool PrefabEntity::clickOnIt(Camera* camera, Node* node)
-{
-
-	if (!node) node = &prefab->root;
-
-	if (node->mesh)
-	{
-		//compute the bounding box of the object in world space (by using the mesh bounding box transformed to world space)
-		BoundingBox world_bounding = transformBoundingBox(model, node->mesh->box);
-
-		//if bounding box is inside the camera frustum then the object is probably visible
-		if (camera->testBoxInFrustum(world_bounding.center, world_bounding.halfsize))
-		{
-			Vector3 cam_dir = camera->getRayDirection(Input::mouse_position.x, Input::mouse_position.y, Application::instance->window_width, Application::instance->window_height);
-			Vector3 colision;
-			if (RayBoundingBoxCollision(world_bounding, camera->eye, cam_dir, colision))
-				return true;
-		}
-	}
-
-	//iterate recursively with children
-	for (int i = 0; i < node->children.size(); ++i)
-		if (clickOnIt(camera, node->children[i])) return true;
-	
-	return false;
 }
 
 Light::Light(Color color, Vector3 position, Vector3 frontVector, const char* name, eLightType light_type, float intensity, bool visible) : BaseEntity(position, Vector3(0,0,1), name, LIGHT, visible)
@@ -156,7 +130,7 @@ void Light::setVisiblePrefab()
 
 void Light::setLightUniforms(Shader* shader)
 {
-	shader->setUniform("u_light_color", color);
+	shader->setUniform("u_light_color", gamma(color));
 	shader->setUniform("u_light_direction", model.frontVector());
 	shader->setUniform("u_light_type", light_type);
 	shader->setUniform("u_light_position", model.getTranslation());
@@ -197,24 +171,13 @@ void Light::renderInMenu()
 	float matrixTranslation[3], matrixRotation[3], matrixScale[3];
 	Vector3 frontVector = model.frontVector();
 	ImGuizmo::DecomposeMatrixToComponents(model.m, matrixTranslation, matrixRotation, matrixScale);
-	changed |= ImGui::DragFloat3("Position", matrixTranslation, 0.1f);
-	ImGui::Text("Light Camera:");
-	changed |= ImGui::SliderFloat("Near", (float*)&camera->near_plane, 0.1f, camera->far_plane);
-	changed |= ImGui::SliderFloat("Far", (float*)&camera->far_plane, camera->near_plane, 10000.0f);
-	changed |= ImGui::DragFloat("Shadow Bias", (float*)&shadow_bias, 0.001f);
 
-	//flags
-	ImGui::Checkbox("Cast Shadows", &cast_shadows);
-	ImGui::Checkbox("Show Shadowmap", &show_shadowmap);
-	ImGui::Checkbox("Update Shadowmap", &update_shadowmap);
-
-	changed |= ImGui::SliderFloat("Max Distance", (float*)&max_distance, 0, 2500);
+	ImGui::Text("Basic Properties:");
 	changed |= ImGui::SliderFloat("Intensity", (float*)&intensity, 0, 25);
-
+	changed |= ImGui::DragFloat3("Position", matrixTranslation, 0.1f);
 	switch (light_type)
 	{
 	case GTR::DIRECTIONAL:
-		changed |= ImGui::SliderFloat("Camera Size", (float*)&ortho_cam_size, 0.1, 2000);
 		changed |= ImGui::SliderFloat3("Direction", (float*)&frontVector[0], -1, 1);
 		break;
 	case GTR::SPOT:
@@ -224,15 +187,32 @@ void Light::renderInMenu()
 		changed |= ImGui::SliderFloat("FOV", (float*)&camera->fov, 0.0f, 180.0f);
 		break;
 	}
-	
-	if (frontVector.length() == 0) frontVector = Vector3(0.1, -0.9, 0.0);
+	changed |= ImGui::SliderFloat("Max Distance", (float*)&max_distance, 0, 2500);
+
+	ImGui::Text("Shadows:");
+	ImGui::Checkbox("Cast Shadows", &cast_shadows);
+	if (cast_shadows)
+	{
+		ImGui::Checkbox("Show Shadowmap", &show_shadowmap);
+		ImGui::Checkbox("Update Shadowmap", &update_shadowmap);
+		changed |= ImGui::DragFloat("Shadow Bias", (float*)&shadow_bias, 0.001f);
+
+		ImGui::Text("Light Camera:");
+		changed |= ImGui::SliderFloat("Camera Size", (float*)&ortho_cam_size, 0.1, 2000);
+		changed |= ImGui::SliderFloat("Near", (float*)&camera->near_plane, 0.1f, camera->far_plane);
+		changed |= ImGui::SliderFloat("Far", (float*)&camera->far_plane, camera->near_plane, 10000.0f);
+
+		if (frontVector.length() == 0) frontVector = Vector3(0.1, -0.9, 0.0);
+		if (light_type != DIRECTIONAL)
+			light_node->material->color = Vector4(color * (intensity / 2), 1);
+	}
+
 	ImGuizmo::RecomposeMatrixFromComponents(matrixTranslation, matrixRotation, matrixScale, model.m);
 	model.setFrontAndOrthonormalize(frontVector);
-	if (light_type != DIRECTIONAL)
-		light_node->material->color = Vector4(color * (intensity/2), 1);
-	bool updateFOV = ImGui::Button("Update FOV");
-	if (changed || updateFOV) updateLightCamera(updateFOV);
-
+	if (cast_shadows) {
+		bool updateFOV = ImGui::Button("Update FOV");
+		if (changed || updateFOV) updateLightCamera(updateFOV);
+	}
 }
 
 void Light::updateLightCamera(bool type_changed)
@@ -253,7 +233,6 @@ void Light::updateLightCamera(bool type_changed)
 	case GTR::POINT:
 		camera->lookAt(model.getTranslation(), model.getTranslation() + Vector3(0, 0, 1), Vector3(0, 1, 0));
 		camera->setPerspective(90.0f, 1.0f, 0.1f, max_distance);
-		camera->far_plane = max_distance;
 		break;
 	}
 }

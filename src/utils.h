@@ -25,6 +25,9 @@ bool checkGLErrors();
 
 std::string getPath();
 
+Vector3 gamma(Vector3 color);
+Vector3 degamma(Vector3 color);
+
 Vector2 getDesktopSize( int display_index = 0 );
 
 std::vector<std::string> tokenize(const std::string& source, const char* delimiters, bool process_strings = false);
@@ -49,5 +52,6 @@ char* fetchBufferVec3u(char* data, std::vector<Vector3u>& vector);
 char* fetchBufferVec4ub(char* data, std::vector<Vector4ub>& vector);
 char* fetchBufferVec4(char* data, std::vector<Vector4>& vector);
 
+Vector3 pow(Vector3 base, Vector3 exponent);
 
 #endif

@@ -23,7 +23,7 @@ Scene::Scene()
 	reverse_shadowmap = true;
 	AA_shadows = true;
 	show_gbuffers = false;
-	use_geometry_on_deferred = false;
+	use_geometry_on_deferred = true;
 	show_deferred_light_geometry = false;
 	forward_for_blends = false;
 }
@@ -94,8 +94,8 @@ void Scene::renderInMenu()
 		PrefabEntity* prefab_selected = Application::instance->prefab_selected;
 		for (int i = 0; i < prefabs.size(); i++)
 		{
-			bool hola = ImGui::Selectable(prefabs[i]->name, selected == i);
-			if (hola) {
+			bool is_selected = ImGui::Selectable(prefabs[i]->name, selected == i);
+			if (is_selected) {
 				if (Application::instance->prefab_selected == prefabs[i])
 					Application::instance->prefab_selected = nullptr;
 				else

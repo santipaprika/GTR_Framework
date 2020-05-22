@@ -6,6 +6,8 @@
 	#include <sys/time.h>
 #endif
 
+#include <math.h>
+
 #include "includes.h"
 
 #include "application.h"
@@ -469,3 +471,20 @@ char* fetchBufferVec4(char* data, std::vector<Vector4>& vector)
 	memcpy(&vector[0], &floats[0], sizeof(float)*floats.size());
 	return data;
 }
+
+
+Vector3 pow(Vector3 base, Vector3 exponent)
+{
+	return Vector3(pow(base.x, exponent.x), pow(base.y, exponent.y), pow(base.z, exponent.z));
+}
+
+Vector3 gamma(Vector3 color)
+{
+	return pow(color, Vector3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
+}
+
+Vector3 degamma(Vector3 color)
+{
+	return pow(color, Vector3(2.2, 2.2, 2.2));
+}
+

@@ -3,294 +3,38 @@ flat basic.vs flat.fs
 texture basic.vs texture.fs
 depth quad.vs depth.fs
 multi basic.vs multi.fs
-// forward
+// --- FORWARD --- 
 noLights basic.vs noLights.fs
-PBR basic.vs PBR.fs
-phong basic.vs phong.fs
-//PBRShadows basic.vs PBRShadows.fs
-phongShadows basic.vs phongShadows.fs
-//PBRAAShadows basic.vs PBRAAShadows.fs
-phongAAShadows basic.vs phongAAShadows.fs
-// deferred
+light basic.vs light.fs
+lightShadows basic.vs lightShadows.fs
+lightAAShadows basic.vs lightAAShadows.fs
+// --- DEFERRED ---
 gbuffers basic.vs gbuffers.fs
 deferred quad.vs deferred.fs
+// Lights pass (basic)
+deferredLight quad.vs deferredLight.fs
+deferredLightShadows quad.vs deferredLightShadows.fs
+deferredLightAAShadows quad.vs deferredLightAAShadows.fs
+// Lights pass with geometry
+deferredLightGeometry basic.vs deferredLight.fs
+deferredLightShadowsGeometry basic.vs deferredLightShadows.fs
+deferredLightAAShadowsGeometry basic.vs deferredLightAAShadows.fs
+// Forward passes for blend materials
 deferredBlend basic.vs deferredBlend.fs
-//// lights pass
-deferredPBR quad.vs deferredPBR.fs
-deferredPhong quad.vs deferredPhong.fs
-//deferredPBRShadows quad.vs deferredPBRShadows.fs
-deferredPhongShadows quad.vs deferredPhongShadows.fs
-//deferredPBRAAShadows quad.vs deferredPBRAAShadows.fs
-deferredPhongAAShadows quad.vs deferredPhongAAShadows.fs
-//// lights pass with geometry
-//deferredPBRGeometry basic.vs deferredPBR.fs
-deferredPhongGeometry basic.vs deferredPhong.fs
-//deferredPBRShadowsGeometry basic.vs deferredPBRShadows.fs
-deferredPhongShadowsGeometry basic.vs deferredPhongShadows.fs
-//deferredPBRAAShadowsGeometry basic.vs deferredPBRAAShadows.fs
-deferredPhongAAShadowsGeometry basic.vs deferredPhongAAShadows.fs
-
-// --------------------------------------------------------------------------
+deferredBlendShadows basic.vs deferredBlendShadows.fs
+deferredBlendAAShadows basic.vs deferredBlendAAShadows.fs
+// degamma shader
+degammaDeferred quad.vs degammaDeferred.fs
+ 
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------- INCLUDES --------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
 
 \getTextureUniforms
-uniform vec4 u_color;
-uniform sampler2D u_texture;
-uniform float u_alpha_cutoff;
-uniform float u_tiles_number;
-uniform sampler2D u_emissive_texture;
-uniform sampler2D u_occlusion_texture;
-
-// --------------------------------------------------------------------------
-
-\getColor
-vec2 uv = v_uv;
-vec4 color = u_color;
-color *= texture2D( u_texture, uv * u_tiles_number);
-
-if(color.a < u_alpha_cutoff)
-	discard;
-
-// --------------------------------------------------------------------------
-
-\basic.vs
-
-#version 330 core
-
-in vec3 a_vertex;
-in vec3 a_normal;
-in vec2 a_uv;
-in vec4 a_color;
-
-uniform vec3 u_camera_pos;
-
-uniform mat4 u_model;
-uniform mat4 u_viewprojection;
-
-//this will store the color for the pixel shader
-out vec3 v_position;
-out vec3 v_world_position;
-out vec3 v_normal;
-out vec2 v_uv;
-out vec4 v_color;
-
-void main()
-{	
-	//calcule the normal in camera space (the NormalMatrix is like ViewMatrix but without traslation)
-	v_normal = (u_model * vec4( a_normal, 0.0) ).xyz;
-	
-	//calcule the vertex in object space
-	v_position = a_vertex;
-	v_world_position = (u_model * vec4( v_position, 1.0) ).xyz;
-	
-	//store the color in the varying var to use it from the pixel shader
-	v_color = a_color;
-
-	//store the texture coordinates
-	v_uv = a_uv;
-
-	//calcule the position of the vertex using the matrices
-	gl_Position = u_viewprojection * vec4( v_world_position, 1.0 );
-}
-
-\quad.vs
-
-#version 330 core
-
-in vec3 a_vertex;
-in vec2 a_uv;
-out vec2 v_uv;
-
-void main()
-{	
-	v_uv = a_uv;
-	gl_Position = vec4( a_vertex, 1.0 );
-}
-
-
-\flat.fs
-
-#version 330 core
-
-uniform vec4 u_color;
-
-out vec4 FragColor;
-
-void main()
-{
-	FragColor = u_color;
-}
-
-
-\texture.fs
-
-#version 330 core
-
-in vec3 v_position;
-in vec3 v_world_position;
-in vec3 v_normal;
-in vec2 v_uv;
-in vec4 v_color;
-
-uniform vec4 u_color;
-uniform sampler2D u_texture;
-uniform float u_time;
-uniform float u_alpha_cutoff;
-uniform float u_tiles_number;
-
-out vec4 FragColor;
-
-void main()
-{
-	vec2 uv = v_uv;
-	vec4 color = u_color;
-	color *= texture( u_texture, uv * u_tiles_number);
-	if(color.a < u_alpha_cutoff)
-		discard;
-
-	FragColor = color;
-}
-
-
-\multi.fs
-
-#version 330 core
-
-in vec3 v_position;
-in vec3 v_world_position;
-in vec3 v_normal;
-in vec2 v_uv;
-
-uniform vec4 u_color;
-uniform sampler2D u_texture;
-uniform float u_time;
-uniform float u_alpha_cutoff;
-uniform float u_tiles_number;
-
-layout(location = 0) out vec4 FragColor;
-layout(location = 1) out vec4 NormalColor;
-
-void main()
-{
-	vec2 uv = v_uv;
-	vec4 color = u_color;
-	color *= texture( u_texture, uv * u_tiles_number);
-
-	if(color.a < u_alpha_cutoff)
-		discard;
-
-	vec3 N = normalize(v_normal);
-
-	FragColor = color;
-	NormalColor = vec4(N,1.0);
-}
-
-
-\depth.fs
-
-#version 330 core
-
-uniform vec2 u_camera_nearfar;
-uniform sampler2D u_texture; //depth map
-in vec2 v_uv;
-out vec4 FragColor;
-
-void main()
-{
-	float n = u_camera_nearfar.x;
-	float f = u_camera_nearfar.y;
-	float z = texture2D(u_texture,v_uv).x;
-	float color = n * (z + 1.0) / (f + n - z * (f - n));
-	FragColor = vec4(color);
-}
-
-
-\instanced.vs
-
-#version 330 core
-
-in vec3 a_vertex;
-in vec3 a_normal;
-in vec2 a_uv;
-
-in mat4 u_model;
-
-uniform vec3 u_camera_pos;
-
-uniform mat4 u_viewprojection;
-
-//this will store the color for the pixel shader
-out vec3 v_position;
-out vec3 v_world_position;
-out vec3 v_normal;
-out vec2 v_uv;
-
-void main()
-{	
-	//calcule the normal in camera space (the NormalMatrix is like ViewMatrix but without traslation)
-	v_normal = (u_model * vec4( a_normal, 0.0) ).xyz;
-	
-	//calcule the vertex in object space
-	v_position = a_vertex;
-	v_world_position = (u_model * vec4( a_vertex, 1.0) ).xyz;
-	
-	//store the texture coordinates
-	v_uv = a_uv;
-
-	//calcule the position of the vertex using the matrices
-	gl_Position = u_viewprojection * vec4( v_world_position, 1.0 );
-}
-
-
-\noLights.fs
-
-#version 330 core
-
-in vec2 v_uv; //texture coordinates
-
-uniform vec4 u_color;
-uniform float u_alpha_cutoff;
-uniform vec3 u_ambient_light;
-uniform sampler2D u_texture;
-uniform sampler2D u_emissive_texture;
-uniform sampler2D u_occlusion_texture;
-uniform float u_tiles_number;
-
-out vec4 FragColor;
-
-void main()
-{
-	vec2 uv = v_uv;
-	vec4 color = u_color;
-
-	//here we can store the total amount of light
-	vec3 light = vec3(0.0);
-	
-	//ambient
-	light += texture2D(u_occlusion_texture, uv * u_tiles_number).x * u_ambient_light; //ambient-occlusion filter applied
-
-	color *= texture2D( u_texture, uv * u_tiles_number);
-	if(color.a < u_alpha_cutoff)
-		discard;
-
-	//apply the light to the final pixel color
-	color.xyz *= light;
-	
-	//emissive
-	color.xyz += texture2D(u_emissive_texture, uv * u_tiles_number).xyz;
-
-	FragColor = color;
-}
-
-
-\PBR.fs
-
-#version 330 core
-
-in vec3 v_world_position; //position in world coords
-in vec3 v_normal; //normal in the pixel
-in vec2 v_uv; //texture coordinates
-uniform vec3 u_camera_position;
-
 uniform float u_alpha_cutoff;
 uniform vec4 u_color;
 uniform vec3 u_ambient_light;
@@ -299,6 +43,9 @@ uniform sampler2D u_occlusion_texture;
 uniform sampler2D u_emissive_texture;
 uniform float u_tiles_number;
 
+// -------------------------------------------------------------------------------------------------------------------------
+
+\getLightUniforms
 uniform vec3 u_light_color;
 uniform int u_light_type;
 uniform vec3 u_light_direction;
@@ -308,7 +55,108 @@ uniform float u_light_intensity;
 uniform float u_light_spotCosineCutoff;
 uniform float u_light_spotExponent;
 
-out vec4 FragColor;
+// -------------------------------------------------------------------------------------------------------------------------
+
+\getShadowUniforms
+uniform sampler2DShadow u_shadowmap_AA;
+uniform sampler2D u_shadowmap;
+uniform mat4 u_shadow_viewproj;
+uniform float u_shadow_bias;
+
+uniform float u_shadowmap_width;
+uniform float u_shadowmap_height;
+
+#define NUM_FACES 6
+uniform mat4 u_shadowmap_viewprojs[6];
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\getDeferredUniforms
+uniform sampler2D u_color_texture;
+uniform sampler2D u_normal_texture;
+uniform sampler2D u_emissive_texture;
+uniform sampler2D u_depth_texture;
+uniform mat4 u_inverse_viewprojection;
+uniform vec2 u_iRes;
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\PBRForwardCode
+if (u_light_type == 0) // directional 						//Light ray
+	mat.L = normalize(-u_light_direction);
+else mat.L = normalize(u_light_position - v_world_position);
+mat.V = normalize(u_camera_pos - v_world_position);	//View ray
+mat.N = normalize(v_normal); 								//Normal ray
+mat.R = normalize(reflect(mat.V, mat.N)); 					//Reflected ray
+mat.H = normalize(mat.V + mat.L); 							//Half 
+	
+mat.NdotH = clamp( dot(mat.N,mat.H), 0.0, 1.0 );
+mat.NdotV = clamp( dot(mat.N,mat.V), 0.0, 1.0 );
+mat.NdotL = clamp( dot(mat.N,mat.L), 0.0, 1.0 );
+mat.LdotH = clamp( dot(mat.L,mat.H), 0.0, 1.0 );
+
+vec4 mat_properties = texture( u_occlusion_texture, uv * u_tiles_number);
+mat.albedo = texture( u_texture, uv * u_tiles_number).xyz;
+mat.roughness = mat_properties.y;
+mat.metalness = mat_properties.z;
+
+//we compute the reflection in base to the color and the metalness
+vec3 f0 = mat.albedo * mat.metalness + (vec3(0.5) * (1.0 - mat.metalness));
+
+//metallic materials do not have diffuse
+vec3 diffuseColor = (1.0 - mat.metalness) * mat.albedo;
+
+//compute the specular
+vec3 Fr_d = specularBRDF(mat.roughness, f0, mat.NdotH, mat.NdotV, mat.NdotL, mat.LdotH);
+
+// Here we use the Burley, but you can replace it by the Lambert.
+float linearRoughness = pow(mat.roughness, 2);
+vec3 Fd_d = diffuseColor * Fd_Burley(mat.NdotV, mat.NdotL, mat.LdotH, linearRoughness); 
+
+//add diffuse and specular reflection
+vec3 direct = Fr_d + Fd_d;
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\PBRDeferredCode
+if (u_light_type == 0) // directional 						//Light ray
+	mat.L = normalize(-u_light_direction);
+else mat.L = normalize(u_light_position - worldpos);
+mat.V = normalize(u_camera_pos - worldpos);					//View ray
+mat.N = N; 													//Normal ray
+mat.R = normalize(reflect(mat.V, mat.N)); 					//Reflected ray
+mat.H = normalize(mat.V + mat.L); 							//Half Vector
+
+mat.NdotH = clamp( dot(mat.N,mat.H), 0.0, 1.0 );
+mat.NdotV = clamp( dot(mat.N,mat.V), 0.0, 1.0 );
+mat.NdotL = clamp( dot(mat.N,mat.L), 0.0, 1.0 );
+mat.LdotH = clamp( dot(mat.L,mat.H), 0.0, 1.0 );
+
+mat.albedo = texture( u_color_texture, uv ).xyz;
+mat.metalness = texture( u_color_texture, uv ).w;
+mat.roughness = texture( u_normal_texture, uv ).w;
+
+//we compute the reflection in base to the color and the metalness
+vec3 f0 = mat.albedo * mat.metalness + (vec3(0.5) * (1.0 - mat.metalness));
+
+//metallic materials do not have diffuse
+vec3 diffuseColor = (1.0 - mat.metalness) * mat.albedo;
+
+//compute the specular
+vec3 Fr_d = specularBRDF(mat.roughness, f0, mat.NdotH, mat.NdotV, mat.NdotL, mat.LdotH);
+
+// Here we use the Burley, but you can replace it by the Lambert.
+float linearRoughness = pow(mat.roughness, 2);
+vec3 Fd_d = diffuseColor * Fd_Burley(mat.NdotV, mat.NdotL, mat.LdotH, linearRoughness); 
+
+//add diffuse and specular reflection
+vec3 direct = Fr_d + Fd_d;
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\PBRFunctions
+uniform vec3 u_camera_pos;
+uniform int illumination_technique;
 
 // Material struct where we will be storing the data
 struct Material 
@@ -328,80 +176,7 @@ struct Material
 	float roughness;
 	vec3 diffuse;
 	vec3 specular;
-
-	// Result
-	vec3 color;
 } mat;
-
-float getAttenuation()
-{	
-	//compute distance
-	float light_distance = length(u_light_position - v_world_position);
-
-	//compute a linear attenuation factor
-	float att_factor = u_light_maxdist - light_distance;
-
-	//normalize factor
-	att_factor /= u_light_maxdist;
-
-	//ignore negative values
-	att_factor = max( att_factor, 0.0 );
-	
-	//quadratic att factor
-	att_factor *= att_factor;
-
-	//apply to amount of light
-	return att_factor;
-}
-
-vec3 getDirectionalLight(vec3 N)
-{
-	//if the light is a directional light the light vector is the same for all pixels
-	mat.L = normalize(-u_light_direction);	//light vector goes in opposite direction
-		
-	//compute how much is aligned
-	float NdotL = dot(N,mat.L);
-
-	//light cannot be negative (but the dot product can)
-	NdotL = clamp( NdotL, 0.0, 1.0 );
-	
-	return NdotL * u_light_color * u_light_intensity;
-}
-
-vec3 computeLight(vec3 light)
-{
-	//very important to normalize as they come interpolated so normalization is lost
-	vec3 N = normalize(v_normal);
-	
-	if( u_light_type == 0 ) {	//directional  light
-		//store the amount of diffuse light
-		return getDirectionalLight(N);
-	}	
-	else //point and spot light
-	{
-		//light vector
-		mat.L = normalize(u_light_position - v_world_position);
-		
-		//compute how much is aligned
-		float NdotL = dot(N,mat.L);
-		
-		//light cannot be negative (but the dot product can)
-		NdotL = clamp( NdotL, 0.0, 1.0 );
-		light += (NdotL * u_light_color) * getAttenuation();
-		
-		if (u_light_type == 1)	{//point light
-			return light * u_light_intensity;
-		}	
-		else	//spot light
-		{
-			vec3 D = normalize(u_light_direction);
-			float spotCosine = dot(D,-mat.L);
-			if (spotCosine >= u_light_spotCosineCutoff)
-				return light * pow(spotCosine,u_light_spotExponent) * u_light_intensity;
-			else return vec3(0.0);
-		}
-	}
-}
 
 #define PI 3.1415926535897932384626433832795
 
@@ -468,6 +243,402 @@ float Fd_Burley ( const in float NoV, const in float NoL, const in float LoH, co
         return lightScatter * viewScatter * RECIPROCAL_PI;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
+\lightForwardFunctions
+float getAttenuation()
+{	
+	//compute distance
+	float light_distance = length(u_light_position - v_world_position);
+
+	//compute a linear attenuation factor
+	float att_factor = u_light_maxdist - light_distance;
+
+	//normalize factor
+	att_factor /= u_light_maxdist;
+
+	//ignore negative values
+	att_factor = max( att_factor, 0.0 );
+	
+	//quadratic att factor
+	att_factor *= att_factor;
+
+	//apply to amount of light
+	return att_factor;
+}
+
+vec3 getDirectionalLight(vec3 N)
+{
+	//if the light is a directional light the light vector is the same for all pixels
+	vec3 L = normalize(-u_light_direction);	//light vector goes in opposite direction
+		
+	//compute how much is aligned
+	float NdotL = dot(N, L);
+
+	//light cannot be negative (but the dot product can)
+	NdotL = clamp( NdotL, 0.0, 1.0 );
+	
+	return NdotL * u_light_color * u_light_intensity;
+}
+
+vec3 computeLight(vec3 light)
+{
+	//very important to normalize as they come interpolated so normalization is lost
+	vec3 N = normalize(v_normal);
+	
+	if( u_light_type == 0 ) {	//directional  light
+		//store the amount of diffuse light
+		return getDirectionalLight(N);
+	}	
+	else //point and spot light
+	{
+		//light vector
+		vec3 L = normalize(u_light_position - v_world_position);
+		
+		//compute how much is aligned
+		float NdotL = dot(N, L);
+		
+		//light cannot be negative (but the dot product can)
+		NdotL = clamp( NdotL, 0.0, 1.0 );
+		light += (NdotL * u_light_color) * getAttenuation();
+		
+		if (u_light_type == 1)	{  //point light
+			return light * u_light_intensity;
+		}	
+		else	//spot light
+		{
+			vec3 D = normalize(u_light_direction);
+			float spotCosine = dot(D, -L);
+			if (spotCosine >= u_light_spotCosineCutoff)
+				return light * pow(spotCosine,u_light_spotExponent) * u_light_intensity;
+			else return vec3(0.0);
+		}
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\lightDeferredFunctions
+float getAttenuation(vec3 world_position)
+{	
+	//compute distance
+	float light_distance = length(u_light_position - world_position);
+
+	//compute a linear attenuation factor
+	float att_factor = u_light_maxdist - light_distance;
+
+	//normalize factor
+	att_factor /= u_light_maxdist;
+
+	//ignore negative values
+	att_factor = max( att_factor, 0.0 );
+	
+	//quadratic att factor
+	att_factor *= att_factor;
+
+	//apply to amount of light
+	return att_factor;
+}
+
+vec3 getDirectionalLight(vec3 N)
+{
+	//if the light is a directional light the light vector is the same for all pixels
+	vec3 L = normalize(-u_light_direction);	//light vector goes in opposite direction
+		
+	//compute how much is aligned
+	float NdotL = dot(N,L);
+
+	//light cannot be negative (but the dot product can)
+	NdotL = clamp( NdotL, 0.0, 1.0 );
+	
+	return NdotL * u_light_color * u_light_intensity;
+}
+
+vec3 computeLight(vec3 light, vec3 normal, vec3 world_position)
+{
+	//very important to normalize as they come interpolated so normalization is lost
+	vec3 N = normalize(normal);
+	
+	if( u_light_type == 0 ) {	//directional  light
+		//store the amount of diffuse light
+		return getDirectionalLight(N);
+	}	
+	else //point and spot light
+	{
+		//light vector
+		vec3 L = normalize(u_light_position - world_position);
+		
+		//compute how much is aligned
+		float NdotL = dot(N, L);
+		
+		//light cannot be negative (but the dot product can)
+		NdotL = clamp( NdotL, 0.0, 1.0 );
+		light += (NdotL * u_light_color) * getAttenuation(world_position);
+		
+		if (u_light_type == 1)	{   //point light
+			return light * u_light_intensity;
+		}	
+		else	//spot light
+		{
+			vec3 D = normalize(u_light_direction);
+			float spotCosine = dot(D, -L);
+			if (spotCosine >= u_light_spotCosineCutoff)
+				return light * pow(spotCosine,u_light_spotExponent) * u_light_intensity;
+			else return vec3(0.0);
+		}
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\reconstructFromGBuffers
+vec2 uv = (gl_FragCoord.xy) * u_iRes.xy; //extract uvs from pixel screenpos
+vec3 color = texture( u_color_texture, uv ).xyz;
+	
+//normals must be converted from 0..1 to -1..+1
+vec3 N = texture( u_normal_texture, uv ).xyz * 2.0 - 1.0;
+N = normalize(N); //always normalize in case of data loss
+//reconstruct world position from depth and inv. viewproj
+float depth = texture( u_depth_texture, uv ).x;
+vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\gammaFunctions
+vec3 degamma(vec3 c)
+{
+    return pow(c,vec3(2.2));
+}
+
+vec3 gamma(vec3 c)
+{
+    return pow(c,vec3(1.0/2.2));
+}
+
+\blank
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------- SHADERS ---------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+
+\basic.vs
+
+#version 330 core
+
+in vec3 a_vertex;
+in vec3 a_normal;
+in vec2 a_uv;
+in vec4 a_color;
+
+uniform vec3 u_camera_pos;
+
+uniform mat4 u_model;
+uniform mat4 u_viewprojection;
+
+//this will store the color for the pixel shader
+out vec3 v_position;
+out vec3 v_world_position;
+out vec3 v_normal;
+out vec2 v_uv;
+out vec4 v_color;
+
+void main()
+{	
+	//calcule the normal in camera space (the NormalMatrix is like ViewMatrix but without traslation)
+	v_normal = (u_model * vec4( a_normal, 0.0) ).xyz;
+	
+	//calcule the vertex in object space
+	v_position = a_vertex;
+	v_world_position = (u_model * vec4( v_position, 1.0) ).xyz;
+	
+	//store the color in the varying var to use it from the pixel shader
+	v_color = a_color;
+
+	//store the texture coordinates
+	v_uv = a_uv;
+
+	//calcule the position of the vertex using the matrices
+	gl_Position = u_viewprojection * vec4( v_world_position, 1.0 );
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\quad.vs
+
+#version 330 core
+
+in vec3 a_vertex;
+in vec2 a_uv;
+out vec2 v_uv;
+
+void main()
+{	
+	v_uv = a_uv;
+	gl_Position = vec4( a_vertex, 1.0 );
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\flat.fs
+
+#version 330 core
+
+uniform vec4 u_color;
+
+out vec4 FragColor;
+
+void main()
+{
+	FragColor = u_color;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\texture.fs
+
+#version 330 core
+
+in vec3 v_position;
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
+in vec4 v_color;
+
+uniform vec4 u_color;
+uniform sampler2D u_texture;
+uniform float u_time;
+uniform float u_alpha_cutoff;
+uniform float u_tiles_number;
+
+out vec4 FragColor;
+
+void main()
+{
+	vec2 uv = v_uv;
+	vec4 color = u_color;
+	color *= texture( u_texture, uv * u_tiles_number);
+	if(color.a < u_alpha_cutoff)
+		discard;
+
+	FragColor = color;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\multi.fs
+
+#version 330 core
+
+in vec3 v_position;
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
+
+uniform vec4 u_color;
+uniform sampler2D u_texture;
+uniform float u_time;
+uniform float u_alpha_cutoff;
+uniform float u_tiles_number;
+
+layout(location = 0) out vec4 FragColor;
+layout(location = 1) out vec4 NormalColor;
+
+void main()
+{
+	vec2 uv = v_uv;
+	vec4 color = u_color;
+	color *= texture( u_texture, uv * u_tiles_number);
+
+	if(color.a < u_alpha_cutoff)
+		discard;
+
+	vec3 N = normalize(v_normal);
+
+	FragColor = color;
+	NormalColor = vec4(N,1.0);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\depth.fs
+
+#version 330 core
+
+uniform vec2 u_camera_nearfar;
+uniform sampler2D u_texture; //depth map
+in vec2 v_uv;
+out vec4 FragColor;
+
+void main()
+{
+	float n = u_camera_nearfar.x;
+	float f = u_camera_nearfar.y;
+	float z = texture2D(u_texture,v_uv).x;
+	float color = n * (z + 1.0) / (f + n - z * (f - n));
+	FragColor = vec4(color);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\instanced.vs
+
+#version 330 core
+
+in vec3 a_vertex;
+in vec3 a_normal;
+in vec2 a_uv;
+
+in mat4 u_model;
+
+uniform vec3 u_camera_pos;
+
+uniform mat4 u_viewprojection;
+
+//this will store the color for the pixel shader
+out vec3 v_position;
+out vec3 v_world_position;
+out vec3 v_normal;
+out vec2 v_uv;
+
+void main()
+{	
+	//calcule the normal in camera space (the NormalMatrix is like ViewMatrix but without traslation)
+	v_normal = (u_model * vec4( a_normal, 0.0) ).xyz;
+	
+	//calcule the vertex in object space
+	v_position = a_vertex;
+	v_world_position = (u_model * vec4( a_vertex, 1.0) ).xyz;
+	
+	//store the texture coordinates
+	v_uv = a_uv;
+
+	//calcule the position of the vertex using the matrices
+	gl_Position = u_viewprojection * vec4( v_world_position, 1.0 );
+}
+\blank
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------- FORWARD ---------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+
+\noLights.fs
+
+#version 330 core
+
+in vec2 v_uv; //texture coordinates
+
+#include "getTextureUniforms"
+
+out vec4 FragColor;
+
 void main()
 {
 	vec2 uv = v_uv;
@@ -475,51 +646,8 @@ void main()
 
 	//here we can store the total amount of light
 	vec3 light = vec3(0.0);
-
-	vec3 lightParams = computeLight(light);
-
-
-
- 	vec4 mat_properties = texture( u_occlusion_texture, uv * u_tiles_number);
-
-	mat.V = normalize(u_camera_position - v_world_position);	//View ray
-	mat.N = normalize(v_normal); 								//Normal ray
-	mat.R = normalize(reflect(mat.V, mat.N)); 								//Reflected ray
-	mat.H = normalize(mat.V + mat.L); 							//Half Vector
 	
-	mat.NdotH = clamp( dot(mat.N,mat.H), 0.0, 1.0 );
-	mat.NdotV = clamp( dot(mat.N,mat.V), 0.0, 1.0 );
-	mat.NdotL = clamp( dot(mat.N,mat.L), 0.0, 1.0 );
-	mat.LdotH = clamp( dot(mat.L,mat.H), 0.0, 1.0 );
-
-	mat.albedo = texture( u_texture, uv * u_tiles_number).xyz;
-	mat.roughness = mat_properties.y;
-	mat.metalness = mat_properties.z;
-
-
-	//we compute the reflection in base to the color and the metalness
-	vec3 f0 = mat.albedo * mat.metalness + (vec3(0.5) * (1.0 - mat.metalness));
-
-	//metallic materials do not have diffuse
-	vec3 diffuseColor = (1.0 - mat.metalness) * mat.albedo;
-
-	//compute the specular
-	vec3 Fr_d = specularBRDF(mat.roughness, f0, mat.NdotH, mat.NdotV, mat.NdotL, mat.LdotH);
-
-	// Here we use the Burley, but you can replace it by the Lambert.
-	float linearRoughness = pow(mat.roughness, 2);
-	vec3 Fd_d = diffuseColor * Fd_Burley(mat.NdotV, mat.NdotL, mat.LdotH, linearRoughness); 
-
-	//add diffuse and specular reflection
-	vec3 direct = Fr_d + Fd_d;
-
-
-
-
-	//function that returns the light using phong
-	light += direct * lightParams;
-	
-	//add the ambient light
+	//ambient
 	light += texture2D(u_occlusion_texture, uv * u_tiles_number).x * u_ambient_light; //ambient-occlusion filter applied
 
 	color *= texture2D( u_texture, uv * u_tiles_number);
@@ -531,13 +659,13 @@ void main()
 	
 	//emissive
 	color.xyz += texture2D(u_emissive_texture, uv * u_tiles_number).xyz;
-	
+
 	FragColor = color;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
 
-
-\phong.fs
+\light.fs
 
 #version 330 core
 
@@ -545,94 +673,15 @@ in vec3 v_world_position; //position in world coords
 in vec3 v_normal; //normal in the pixel
 in vec2 v_uv; //texture coordinates
 
-uniform float u_alpha_cutoff;
-uniform vec4 u_color;
-uniform vec3 u_ambient_light;
-uniform sampler2D u_texture;
-uniform sampler2D u_occlusion_texture;
-uniform sampler2D u_emissive_texture;
-uniform float u_tiles_number;
+#include "getTextureUniforms"
 
-uniform vec3 u_light_color;
-uniform int u_light_type;
-uniform vec3 u_light_direction;
-uniform vec3 u_light_position;
-uniform float u_light_maxdist;
-uniform float u_light_intensity;
-uniform float u_light_spotCosineCutoff;
-uniform float u_light_spotExponent;
+#include "getLightUniforms"
 
 out vec4 FragColor;
 
-float getAttenuation()
-{	
-	//compute distance
-	float light_distance = length(u_light_position - v_world_position);
+#include "PBRFunctions"
 
-	//compute a linear attenuation factor
-	float att_factor = u_light_maxdist - light_distance;
-
-	//normalize factor
-	att_factor /= u_light_maxdist;
-
-	//ignore negative values
-	att_factor = max( att_factor, 0.0 );
-	
-	//quadratic att factor
-	att_factor *= att_factor;
-
-	//apply to amount of light
-	return att_factor;
-}
-
-vec3 getDirectionalLight(vec3 N)
-{
-	//if the light is a directional light the light vector is the same for all pixels
-	vec3 L = normalize(-u_light_direction);	//light vector goes in opposite direction
-		
-	//compute how much is aligned
-	float NdotL = dot(N,L);
-
-	//light cannot be negative (but the dot product can)
-	NdotL = clamp( NdotL, 0.0, 1.0 );
-	
-	return NdotL * u_light_color * u_light_intensity;
-}
-
-vec3 computeLight(vec3 light)
-{
-	//very important to normalize as they come interpolated so normalization is lost
-	vec3 N = normalize(v_normal);
-	
-	if( u_light_type == 0 ) {	//directional  light
-		//store the amount of diffuse light
-		return getDirectionalLight(N);
-	}	
-	else //point and spot light
-	{
-		//light vector
-		vec3 L = normalize(u_light_position - v_world_position);
-		
-		//compute how much is aligned
-		float NdotL = dot(N,L);
-		
-		//light cannot be negative (but the dot product can)
-		NdotL = clamp( NdotL, 0.0, 1.0 );
-		light += (NdotL * u_light_color) * getAttenuation();
-		
-		if (u_light_type == 1)	{//point light
-			return light * u_light_intensity;
-		}	
-		else	//spot light
-		{
-			vec3 D = normalize(u_light_direction);
-			float spotCosine = dot(D,-L);
-			if (spotCosine >= u_light_spotCosineCutoff)
-				return light * pow(spotCosine,u_light_spotExponent) * u_light_intensity;
-			else return vec3(0.0);
-		}
-	}
-}
+#include "lightForwardFunctions"
 
 void main()
 {
@@ -642,8 +691,17 @@ void main()
 	//here we can store the total amount of light
 	vec3 light = vec3(0.0);
 
-	//function that returns the light using phong
-	light = computeLight(light);
+	if (illumination_technique == 1) //PBR
+	{
+		vec3 lightParams = computeLight(light);
+		
+		#include "PBRForwardCode"
+
+		//function that returns the light using phong
+		light += direct * lightParams;
+	}
+	else //Phong
+		light += computeLight(light);
 	
 	//add the ambient light
 	light += texture2D(u_occlusion_texture, uv * u_tiles_number).x * u_ambient_light; //ambient-occlusion filter applied
@@ -661,9 +719,9 @@ void main()
 	FragColor = color;
 }
 
-// ----------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
 
-\phongShadows.fs
+\lightShadows.fs
 
 #version 330 core
 
@@ -671,101 +729,17 @@ in vec3 v_world_position;
 in vec3 v_normal;
 in vec2 v_uv;
 
-uniform float u_alpha_cutoff;
-uniform vec4 u_color;
-uniform vec3 u_ambient_light;
-uniform sampler2D u_texture;
-uniform sampler2D u_occlusion_texture;
-uniform sampler2D u_emissive_texture;
-uniform float u_tiles_number;
+#include "getTextureUniforms"
 
-uniform vec3 u_light_color;
-uniform int u_light_type;
-uniform vec3 u_light_direction;
-uniform vec3 u_light_position;
-uniform float u_light_maxdist;
-uniform float u_light_intensity;
-uniform float u_light_spotCosineCutoff;
-uniform float u_light_spotExponent;
+#include "getLightUniforms"
 
-uniform sampler2D u_shadowmap;
-uniform mat4 u_shadow_viewproj;
-uniform float u_shadow_bias;
-
-#define NUM_FACES 6
-uniform mat4 u_shadowmap_viewprojs[6];
+#include "getShadowUniforms"
 
 out vec4 FragColor;
 
-float getAttenuation()
-{	
-	//compute distance
-	float light_distance = length(u_light_position - v_world_position);
+#include "PBRFunctions"
 
-	//compute a linear attenuation factor
-	float att_factor = u_light_maxdist - light_distance;
-
-	//normalize factor
-	att_factor /= u_light_maxdist;
-
-	//ignore negative values
-	att_factor = max( att_factor, 0.0 );
-	
-	//quadratic att factor
-	att_factor *= att_factor;
-
-	//apply to amount of light
-	return att_factor;
-}
-
-vec3 getDirectionalLight(vec3 N)
-{
-	//if the light is a directional light the light vector is the same for all pixels
-	vec3 L = normalize(-u_light_direction);	//light vector goes in opposite direction
-		
-	//compute how much is aligned
-	float NdotL = dot(N,L);
-
-	//light cannot be negative (but the dot product can)
-	NdotL = clamp( NdotL, 0.0, 1.0 );
-	
-	return NdotL * u_light_color * u_light_intensity;
-}
-
-vec3 computeLight(vec3 light)
-{
-	//very important to normalize as they come interpolated so normalization is lost
-	vec3 N = normalize(v_normal);
-	
-	if( u_light_type == 0 ) {	//directional  light
-		//store the amount of diffuse light
-		return getDirectionalLight(N);
-	}	
-	else //point and spot light
-	{
-		//light vector
-		vec3 L = normalize(u_light_position - v_world_position);
-		
-		//compute how much is aligned
-		float NdotL = dot(N,L);
-		
-		//light cannot be negative (but the dot product can)
-		NdotL = clamp( NdotL, 0.0, 1.0 );
-		light += (NdotL * u_light_color) * getAttenuation();
-		
-		if (u_light_type == 1)	{//point light
-			return light * u_light_intensity;
-		}	
-		else	//spot light
-		{
-			vec3 D = normalize(u_light_direction);
-			float spotCosine = dot(D,-L);
-			if (spotCosine >= u_light_spotCosineCutoff)
-				return light * pow(spotCosine,u_light_spotExponent) * u_light_intensity;
-			else return vec3(0.0);
-		}
-	}
-}
+#include "lightForwardFunctions"
 
 bool getShadowFactorPointLight()
 {
@@ -796,9 +770,7 @@ bool getShadowFactorPointLight()
 
 		break;
 	}
-	
 	return true;
-	
 }
 
 bool isShadowed()	// returns if point is shadowed
@@ -863,9 +835,25 @@ void main()
 	//here we can store the total amount of light
 	vec3 light = vec3(0.0);
 	
-	//check if it is in shadow or not
-	if (!isShadowed())
-		light += computeLight(light); //function that returns the light using phong
+	if (illumination_technique == 1) //PBR
+	{
+		//check if it is in shadow or not
+		if (!isShadowed())
+		{
+			vec3 lightParams = computeLight(light);
+			
+			#include "PBRForwardCode"
+
+			//function that returns the light using phong
+			light += direct * lightParams;
+		}
+	}
+	else //Phong
+	{
+		//check if it is in shadow or not
+		if (!isShadowed())
+			light += computeLight(light); //function that returns the light using phong
+	}
 	
 	//add the ambient light
 	light += texture2D(u_occlusion_texture, uv * u_tiles_number).x * u_ambient_light; //ambient-occlusion filter applied
@@ -883,10 +871,9 @@ void main()
 	FragColor = color;
 }
 
-// ----------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
 
-
-\phongAAShadows.fs
+\lightAAShadows.fs
 
 #version 330 core
 
@@ -894,104 +881,17 @@ in vec3 v_world_position;
 in vec3 v_normal;
 in vec2 v_uv;
 
-uniform float u_alpha_cutoff;
-uniform vec4 u_color;
-uniform vec3 u_ambient_light;
-uniform sampler2D u_texture;
-uniform sampler2D u_occlusion_texture;
-uniform sampler2D u_emissive_texture;
-uniform float u_tiles_number;
+#include "getTextureUniforms"
 
-uniform vec3 u_light_color;
-uniform int u_light_type;
-uniform vec3 u_light_direction;
-uniform vec3 u_light_position;
-uniform float u_light_maxdist;
-uniform float u_light_intensity;
-uniform float u_light_spotCosineCutoff;
-uniform float u_light_spotExponent;
+#include "getLightUniforms"
 
-uniform sampler2DShadow u_shadowmap_AA;
-uniform sampler2D u_shadowmap;
-uniform mat4 u_shadow_viewproj;
-uniform float u_shadow_bias;
-
-uniform float u_shadowmap_width;
-uniform float u_shadowmap_height;
-#define NUM_FACES 6
-uniform mat4 u_shadowmap_viewprojs[6];
+#include "getShadowUniforms"
 
 out vec4 FragColor;
 
-float getAttenuation()
-{	
-	//compute distance
-	float light_distance = length(u_light_position - v_world_position);
+#include "PBRFunctions"
 
-	//compute a linear attenuation factor
-	float att_factor = u_light_maxdist - light_distance;
-
-	//normalize factor
-	att_factor /= u_light_maxdist;
-
-	//ignore negative values
-	att_factor = max( att_factor, 0.0 );
-	
-	//quadratic att factor
-	att_factor *= att_factor;
-
-	//apply to amount of light
-	return att_factor;
-}
-
-vec3 getDirectionalLight(vec3 N)
-{
-	//if the light is a directional light the light vector is the same for all pixels
-	vec3 L = normalize(-u_light_direction);	//light vector goes in opposite direction
-		
-	//compute how much is aligned
-	float NdotL = dot(N,L);
-
-	//light cannot be negative (but the dot product can)
-	NdotL = clamp( NdotL, 0.0, 1.0 );
-	
-	return NdotL * u_light_color * u_light_intensity;
-}
-
-vec3 computeLight(vec3 light)
-{
-	//very important to normalize as they come interpolated so normalization is lost
-	vec3 N = normalize(v_normal);
-	
-	if( u_light_type == 0 ) {	//directional  light
-		//store the amount of diffuse light
-		return getDirectionalLight(N);
-	}	
-	else //point and spot light
-	{
-		//light vector
-		vec3 L = normalize(u_light_position - v_world_position);
-		
-		//compute how much is aligned
-		float NdotL = dot(N,L);
-		
-		//light cannot be negative (but the dot product can)
-		NdotL = clamp( NdotL, 0.0, 1.0 );
-		light += (NdotL * u_light_color) * getAttenuation();
-		
-		if (u_light_type == 1)	{//point light
-			return light * u_light_intensity;
-		}	
-		else	//spot light
-		{
-			vec3 D = normalize(u_light_direction);
-			float spotCosine = dot(D,-L);
-			if (spotCosine >= u_light_spotCosineCutoff)
-				return light * pow(spotCosine,u_light_spotExponent) * u_light_intensity;
-			else return vec3(0.0);
-		}
-	}
-}
+#include "lightForwardFunctions"
 
 float getShadowFactorPointLight()
 {
@@ -1022,9 +922,7 @@ float getShadowFactorPointLight()
 
 		break;
 	}
-	
 	return 1.0;
-	
 }
 
 float getShadowFactor()	// returns if point is shadowed
@@ -1090,8 +988,20 @@ void main()
 
 	//here we can store the total amount of light
 	vec3 light = vec3(0.0);
+
 	float shadowFact = getShadowFactor();
-	light += shadowFact * computeLight(light); //function that returns the light using phong
+
+	if (illumination_technique == 1) //PBR
+	{
+		vec3 lightParams = shadowFact * computeLight(light);
+		
+		#include "PBRForwardCode"
+
+		//function that returns the light using phong
+		light += direct * lightParams;
+	}
+	else //Phong
+		light += shadowFact * computeLight(light);
 	
 	//add the ambient light
 	light += texture2D(u_occlusion_texture, uv * u_tiles_number).x * u_ambient_light; //ambient-occlusion filter applied
@@ -1108,16 +1018,14 @@ void main()
 	
 	FragColor = color;
 }
-
-
-// -----------------------------------------------------------------------
-// -----------------------------------------------------------------------
-// -----------------------------------------------------------------------
-// -------------------------- DEFERRED -----------------------------------
-// -----------------------------------------------------------------------
-// -----------------------------------------------------------------------
-// -----------------------------------------------------------------------
-
+\blank
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------- DEFERRED --------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------
 
 \gbuffers.fs
 
@@ -1127,17 +1035,15 @@ in vec3 v_world_position;
 in vec3 v_normal;
 in vec2 v_uv;
 
-uniform vec4 u_color;
-uniform float u_tiles_number;
-uniform sampler2D u_texture;
-uniform sampler2D u_emissive_texture;
-uniform sampler2D u_occlusion_texture;
-uniform float u_time;
-uniform float u_alpha_cutoff;
+#include "getTextureUniforms"
+
+uniform bool u_use_gamma_correction;
 
 layout(location = 0) out vec4 FragColor;
 layout(location = 1) out vec4 NormalColor;
 layout(location = 2) out vec4 EimssiveColor;
+
+#include "gammaFunctions"
 
 void main()
 {
@@ -1150,7 +1056,17 @@ void main()
 	vec4 matProperties = texture( u_occlusion_texture, uv * u_tiles_number);
 	vec4 emissive = texture( u_emissive_texture, uv * u_tiles_number);
 	
-	color *= texture( u_texture, uv * u_tiles_number);
+	vec4 texture_color = texture( u_texture, uv * u_tiles_number);
+	
+	if (u_use_gamma_correction) {
+		EimssiveColor = vec4(gamma(emissive.xyz), matProperties.x);
+		color.xyz *= gamma(texture_color.xyz);
+	}
+	else {
+		EimssiveColor = vec4(emissive.xyz, matProperties.x);
+		color.xyz *= texture_color.xyz;
+	}
+	
 	//discard some pixels depending on the pixel screen position and its transparency
 	if(	color.a < 0.9 && floor(mod(gl_FragCoord.x,2.0)) != floor(mod(gl_FragCoord.y,2.0)) )
 		discard;
@@ -1160,21 +1076,17 @@ void main()
 	vec3 N = normalize(v_normal);
 	NormalColor = vec4(N*0.5 + vec3(0.5), matProperties.y);
 	
-	EimssiveColor = vec4(emissive.xyz, matProperties.x);
+	
+	
 }
 
-
+// -------------------------------------------------------------------------------------------------------------------------
 
 \deferred.fs
 
 #version 330
 
-uniform sampler2D u_color_texture;
-uniform sampler2D u_normal_texture;
-uniform sampler2D u_emissive_texture;
-uniform sampler2D u_depth_texture;
-uniform mat4 u_inverse_viewprojection;
-uniform vec2 u_iRes;
+#include "getDeferredUniforms"
 
 uniform vec3 u_ambient_light;
 
@@ -1202,16 +1114,7 @@ vec3 getDirectionalLight(vec3 N)
 
 void main()
 {
-	vec2 uv = (gl_FragCoord.xy) * u_iRes.xy; //extract uvs from pixel screenpos
-	vec3 color = texture( u_color_texture, uv ).xyz;
-	//normals must be converted from 0..1 to -1..+1
-	vec3 N = texture( u_normal_texture, uv ).xyz * 2.0 - 1.0;
-	N = normalize(N); //always normalize in case of data loss
-	//reconstruct world position from depth and inv. viewproj
-	float depth = texture( u_depth_texture, uv ).x;
-	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
-	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
-	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+	#include "reconstructFromGBuffers"
 	
 	vec3 light = vec3(0.0);
 	light += texture(u_emissive_texture, uv).w * u_ambient_light; // ambient
@@ -1225,367 +1128,99 @@ void main()
 	FragColor = vec4(color, 1.0);
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
 
 \deferredBlend.fs
 
 #version 330
 
-uniform sampler2D u_color_texture;
-uniform sampler2D u_normal_texture;
-uniform sampler2D u_emissive_texture;
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
+
 uniform sampler2D u_depth_texture;
 uniform mat4 u_inverse_viewprojection;
 uniform vec2 u_iRes;
 
-uniform vec3 u_light_color;
-uniform int u_light_type;
-uniform vec3 u_light_direction;
-uniform vec3 u_light_position;
-uniform float u_light_maxdist;
-uniform float u_light_intensity;
-uniform float u_light_spotCosineCutoff;
-uniform float u_light_spotExponent;
+#include "getTextureUniforms"
 
-layout(location = 0) out vec4 FragColor;
+#include "getLightUniforms"
 
-float getAttenuation(vec3 world_position)
-{	
-	//compute distance
-	float light_distance = length(u_light_position - world_position);
+out vec4 FragColor;
 
-	//compute a linear attenuation factor
-	float att_factor = u_light_maxdist - light_distance;
+#include "PBRFunctions"
 
-	//normalize factor
-	att_factor /= u_light_maxdist;
-
-	//ignore negative values
-	att_factor = max( att_factor, 0.0 );
-	
-	//quadratic att factor
-	att_factor *= att_factor;
-
-	//apply to amount of light
-	return att_factor;
-}
-
-vec3 getDirectionalLight(vec3 N)
-{
-	//if the light is a directional light the light vector is the same for all pixels
-	vec3 L = normalize(-u_light_direction);	//light vector goes in opposite direction
-		
-	//compute how much is aligned
-	float NdotL = dot(N,L);
-
-	//light cannot be negative (but the dot product can)
-	NdotL = clamp( NdotL, 0.0, 1.0 );
-	
-	return NdotL * u_light_color * u_light_intensity;
-}
-
-vec3 computeLight(vec3 light, vec3 normal, vec3 world_position)
-{
-	//very important to normalize as they come interpolated so normalization is lost
-	vec3 N = normalize(normal);
-	
-	if( u_light_type == 0 ) {	//directional  light
-		//store the amount of diffuse light
-		return getDirectionalLight(N);
-	}	
-	else //point and spot light
-	{
-		//light vector
-		vec3 L = normalize(u_light_position - world_position);
-		
-		//compute how much is aligned
-		float NdotL = dot(N,L);
-		
-		//light cannot be negative (but the dot product can)
-		NdotL = clamp( NdotL, 0.0, 1.0 );
-		light += (NdotL * u_light_color) * getAttenuation(world_position);
-		
-		if (u_light_type == 1)	{//point light
-			return light * u_light_intensity;
-		}	
-		else	//spot light
-		{
-			vec3 D = normalize(u_light_direction);
-			float spotCosine = dot(D,-L);
-			if (spotCosine >= u_light_spotCosineCutoff)
-				return light * pow(spotCosine,u_light_spotExponent) * u_light_intensity;
-			else return vec3(0.0);
-		}
-	}
-}
+#include "lightForwardFunctions"
 
 void main()
 {
-	vec2 uv = (gl_FragCoord.xy) * u_iRes.xy; //extract uvs from pixel screenpos
-	vec3 color = texture( u_color_texture, uv ).xyz;
-	//normals must be converted from 0..1 to -1..+1
-	vec3 N = texture( u_normal_texture, uv ).xyz * 2.0 - 1.0;
-	N = normalize(N); //always normalize in case of data loss
-	//reconstruct world position from depth and inv. viewproj
-	float depth = texture( u_depth_texture, uv ).x;
-	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
-	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
-	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+	vec4 color = u_color;
+	vec2 uv = v_uv;
+	vec2 uv_gbuffer = (gl_FragCoord.xy) * u_iRes.xy; //extract uvs from pixel screenpos
+	
+	color *= texture( u_texture, uv * u_tiles_number);
+	float depth = texture( u_depth_texture, uv_gbuffer ).x;
 	
 	vec3 light = vec3(0.0);
 
-	if (depth < worldpos.z)
+	if (depth < gl_FragCoord.z) {
 		discard;
+	}
+	
+	if (illumination_technique == 1) //PBR
+	{
+		vec3 lightParams = computeLight(light);
+		
+		#include "PBRForwardCode"
 
-	//function that returns the light using phong
-	light = computeLight(light, N, worldpos);
-
+		//function that returns the light using phong
+		light += direct * lightParams;
+	}
+	else //Phong
+		light += computeLight(light);
+	
+	light += texture2D(u_occlusion_texture, v_uv * u_tiles_number).x * u_ambient_light;
+	
 	//apply the light to the final pixel color
 	color.xyz *= light;
 	
-	FragColor = vec4(color, 1.0);
+	FragColor = color;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
 
-\deferredPBR.fs
+\deferredLight.fs
 
 #version 330 core
 
-uniform vec3 u_camera_pos;
-uniform sampler2D u_color_texture;
-uniform sampler2D u_normal_texture;
-uniform sampler2D u_emissive_texture;
-uniform sampler2D u_depth_texture;
-uniform mat4 u_inverse_viewprojection;
-uniform vec2 u_iRes;
+#include "getDeferredUniforms"
 
-uniform vec3 u_light_color;
-uniform int u_light_type;
-uniform vec3 u_light_direction;
-uniform vec3 u_light_position;
-uniform float u_light_maxdist;
-uniform float u_light_intensity;
-uniform float u_light_spotCosineCutoff;
-uniform float u_light_spotExponent;
+#include "getLightUniforms"
 
 out vec4 FragColor;
 
-// Material struct where we will be storing the data
-struct Material 
-{
-    // Vectors
-	vec3 V, N, R, L, H;
-	
-	// Dot products
-	float NdotV;
-	float LdotH;
-	float NdotL;
-	float NdotH;
+#include "PBRFunctions"
 
-	// Properties
-	vec3 albedo;
-    float metalness;
-	float roughness;
-	vec3 diffuse;
-	vec3 specular;
-
-	// Result
-	vec3 color;
-} mat;
-
-float getAttenuation(vec3 world_position)
-{	
-	//compute distance
-	float light_distance = length(u_light_position - world_position);
-
-	//compute a linear attenuation factor
-	float att_factor = u_light_maxdist - light_distance;
-
-	//normalize factor
-	att_factor /= u_light_maxdist;
-
-	//ignore negative values
-	att_factor = max( att_factor, 0.0 );
-	
-	//quadratic att factor
-	att_factor *= att_factor;
-
-	//apply to amount of light
-	return att_factor;
-}
-
-vec3 getDirectionalLight(vec3 N)
-{
-	//if the light is a directional light the light vector is the same for all pixels
-	mat.L = normalize(-u_light_direction);	//light vector goes in opposite direction
-		
-	//compute how much is aligned
-	float NdotL = dot(N,mat.L);
-
-	//light cannot be negative (but the dot product can)
-	NdotL = clamp( NdotL, 0.0, 1.0 );
-	
-	return NdotL * u_light_color * u_light_intensity;
-}
-
-vec3 computeLight(vec3 light, vec3 normal, vec3 world_position)
-{
-	//very important to normalize as they come interpolated so normalization is lost
-	vec3 N = normalize(normal);
-	
-	if( u_light_type == 0 ) {	//directional  light
-		//store the amount of diffuse light
-		return getDirectionalLight(N);
-	}	
-	else //point and spot light
-	{
-		//light vector
-		mat.L = normalize(u_light_position - world_position);
-		
-		//compute how much is aligned
-		float NdotL = dot(N,mat.L);
-		
-		//light cannot be negative (but the dot product can)
-		NdotL = clamp( NdotL, 0.0, 1.0 );
-		light += (NdotL * u_light_color) * getAttenuation(world_position);
-		
-		if (u_light_type == 1)	{//point light
-			return light * u_light_intensity;
-		}	
-		else	//spot light
-		{
-			vec3 D = normalize(u_light_direction);
-			float spotCosine = dot(D,-mat.L);
-			if (spotCosine >= u_light_spotCosineCutoff)
-				return light * pow(spotCosine,u_light_spotExponent) * u_light_intensity;
-			else return vec3(0.0);
-		}
-	}
-}
-
-#define PI 3.1415926535897932384626433832795
-
-// Normal Distribution Function using GGX Distribution
-float D_GGX ( const in float NoH, const in float linearRoughness )
-{
-	float a2 = linearRoughness * linearRoughness;
-	float f = (NoH * NoH) * (a2 - 1.0) + 1.0;
-	return a2 / (PI * f * f);
-}
-
-// Fresnel term with scalar optimization(f90=1)
-vec3 F_Schlick( const in float VoH, const in vec3 f0 )
-{
-	float f = pow(1.0 - VoH, 5.0);
-	return f0 + (vec3(1.0) - f0) * f;
-}
-
-// Geometry Term: Geometry masking/shadowing due to microfacets
-float GGX( float NdotV, float k )
-{
-	return NdotV / (NdotV * (1.0 - k) + k);
-}
-	
-float G_Smith( float NdotV, float NdotL, float roughness )
-{
-	float k = pow(roughness + 1.0, 2.0) / 8.0;
-	return GGX(NdotL, k) * GGX(NdotV, k);
-}
-
-//this is the cook torrance specular reflection model
-vec3 specularBRDF( float roughness, vec3 f0, float NoH, float NoV, float NoL, float LoH )
-{
-	float a = roughness * roughness;
-
-	// Normal Distribution Function
-	float D = D_GGX( NoH, a );
-
-	// Fresnel Function
-	vec3 F = F_Schlick( LoH, f0 );
-
-	// Visibility Function (shadowing/masking)
-	float G = G_Smith( NoV, NoL, roughness );
-		
-	// Norm factor
-	vec3 spec = D * G * F;
-	spec /= (4.0 * NoL * NoV + 1e-6);
-
-	return spec;
-}
-
-float F_Schlick(float u, float f0, float f90) {
-    return f0 + (f90 - f0) * pow(1.0 - u, 5.0);
-}
-
-#define RECIPROCAL_PI 0.3183098861837697
-
-// Diffuse Reflections: Disney BRDF using retro-reflections using F term, this is much more complex!!
-float Fd_Burley ( const in float NoV, const in float NoL, const in float LoH, const in float linearRoughness )
-{
-        float f90 = 0.5 + 2.0 * linearRoughness * LoH * LoH;
-        float lightScatter = F_Schlick( NoL, 1.0, f90 );
-        float viewScatter  = F_Schlick( NoV, 1.0, f90 );
-        return lightScatter * viewScatter * RECIPROCAL_PI;
-}
+#include "lightDeferredFunctions"
 
 void main()
 {
-	vec2 uv = (gl_FragCoord.xy) * u_iRes.xy; //extract uvs from pixel screenpos
-	vec3 color = texture( u_color_texture, uv ).xyz;
-	
-	//normals must be converted from 0..1 to -1..+1
-	vec3 N = texture( u_normal_texture, uv ).xyz * 2.0 - 1.0;
-	N = normalize(N); //always normalize in case of data loss
-	//reconstruct world position from depth and inv. viewproj
-	float depth = texture( u_depth_texture, uv ).x;
-	if (depth == 1) discard;
-	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
-	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
-	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+	#include "reconstructFromGBuffers"
 
 	//here we can store the total amount of light
 	vec3 light = vec3(0.0);
 
-	vec3 lightParams = computeLight(light, N, worldpos);
+	if (illumination_technique == 1) // PBR
+	{
+		vec3 lightParams = computeLight(light, N, worldpos);
+		
+		#include "PBRDeferredCode"
 
-
-
-	mat.V = normalize(u_camera_pos - worldpos);		//View ray
-	mat.N = N; 										//Normal ray
-	mat.R = normalize(reflect(mat.V, mat.N)); 		//Reflected ray
-	mat.H = normalize(mat.V + mat.L); 				//Half Vector
-	
-	mat.NdotH = clamp( dot(mat.N,mat.H), 0.0, 1.0 );
-	mat.NdotV = clamp( dot(mat.N,mat.V), 0.0, 1.0 );
-	mat.NdotL = clamp( dot(mat.N,mat.L), 0.0, 1.0 );
-	mat.LdotH = clamp( dot(mat.L,mat.H), 0.0, 1.0 );
-
-	mat.albedo = texture( u_color_texture, uv ).xyz;
-	mat.metalness = texture( u_color_texture, uv ).w;
-	mat.roughness = texture( u_normal_texture, uv ).w;
-
-
-	//we compute the reflection in base to the color and the metalness
-	vec3 f0 = mat.albedo * mat.metalness + (vec3(0.5) * (1.0 - mat.metalness));
-
-	//metallic materials do not have diffuse
-	vec3 diffuseColor = (1.0 - mat.metalness) * mat.albedo;
-
-	//compute the specular
-	vec3 Fr_d = specularBRDF(mat.roughness, f0, mat.NdotH, mat.NdotV, mat.NdotL, mat.LdotH);
-
-	// Here we use the Burley, but you can replace it by the Lambert.
-	float linearRoughness = pow(mat.roughness, 2);
-	vec3 Fd_d = diffuseColor * Fd_Burley(mat.NdotV, mat.NdotL, mat.LdotH, linearRoughness); 
-
-	//add diffuse and specular reflection
-	vec3 direct = Fr_d + Fd_d;
-
-
-
-
-
-	//function that returns the light using phong
-	light += direct * lightParams;
+		//function that returns the light using phong
+		light += direct * lightParams;
+	}
+	else // Phong
+		light += computeLight(light, N, worldpos);
 	
 	//apply the light to the final pixel color
 	color.xyz *= light;
@@ -1594,228 +1229,178 @@ void main()
 	return;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
 
+\deferredBlendShadows.fs
 
-\deferredPhong.fs
+#version 330
 
-#version 330 core
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
 
-uniform sampler2D u_color_texture;
-uniform sampler2D u_normal_texture;
-uniform sampler2D u_emissive_texture;
 uniform sampler2D u_depth_texture;
 uniform mat4 u_inverse_viewprojection;
 uniform vec2 u_iRes;
 
-uniform vec3 u_light_color;
-uniform int u_light_type;
-uniform vec3 u_light_direction;
-uniform vec3 u_light_position;
-uniform float u_light_maxdist;
-uniform float u_light_intensity;
-uniform float u_light_spotCosineCutoff;
-uniform float u_light_spotExponent;
+#include "getTextureUniforms"
+
+#include "getLightUniforms"
+
+#include "getShadowUniforms"
 
 out vec4 FragColor;
 
-float getAttenuation(vec3 world_position)
-{	
-	//compute distance
-	float light_distance = length(u_light_position - world_position);
+#include "PBRFunctions"
 
-	//compute a linear attenuation factor
-	float att_factor = u_light_maxdist - light_distance;
+#include "lightForwardFunctions"
 
-	//normalize factor
-	att_factor /= u_light_maxdist;
-
-	//ignore negative values
-	att_factor = max( att_factor, 0.0 );
-	
-	//quadratic att factor
-	att_factor *= att_factor;
-
-	//apply to amount of light
-	return att_factor;
-}
-
-vec3 getDirectionalLight(vec3 N)
+bool getShadowFactorPointLight()
 {
-	//if the light is a directional light the light vector is the same for all pixels
-	vec3 L = normalize(-u_light_direction);	//light vector goes in opposite direction
+	const float i_offset = 1.0 / 6.0;
+	for (int i = 0; i < 6; i++) {
 		
-	//compute how much is aligned
-	float NdotL = dot(N,L);
+		mat4 shadowmap_viewproj = mat4(1.0);
+		vec4 proj_pos = u_shadowmap_viewprojs[i] * vec4(v_world_position,1.0);
+		vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+		shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+		//it is outside on the sides, try next face
+		if(shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
+			continue;
 
-	//light cannot be negative (but the dot product can)
-	NdotL = clamp( NdotL, 0.0, 1.0 );
-	
-	return NdotL * u_light_color * u_light_intensity;
-}
+		shadow_uv.x *= i_offset;
+		shadow_uv.x += i_offset * float(i);
+		
+		float real_depth = (proj_pos.z - u_shadow_bias) / proj_pos.w;
+		real_depth = real_depth * 0.5 + 0.5;
+		
+		float shadow_depth = texture2D(u_shadowmap, shadow_uv).x;
 
-vec3 computeLight(vec3 light, vec3 normal, vec3 world_position)
-{
-	//very important to normalize as they come interpolated so normalization is lost
-	vec3 N = normalize(normal);
-	
-	if( u_light_type == 0 ) {	//directional  light
-		//store the amount of diffuse light
-		return getDirectionalLight(N);
-	}	
-	else //point and spot light
-	{
-		//light vector
-		vec3 L = normalize(u_light_position - world_position);
+		if(real_depth < 0.0 || real_depth > 1.0)
+			return false;
 		
-		//compute how much is aligned
-		float NdotL = dot(N,L);
-		
-		//light cannot be negative (but the dot product can)
-		NdotL = clamp( NdotL, 0.0, 1.0 );
-		light += (NdotL * u_light_color) * getAttenuation(world_position);
-		
-		if (u_light_type == 1)	{//point light
-			return light * u_light_intensity;
-		}	
-		else	//spot light
-		{
-			vec3 D = normalize(u_light_direction);
-			float spotCosine = dot(D,-L);
-			if (spotCosine >= u_light_spotCosineCutoff)
-				return light * pow(spotCosine,u_light_spotExponent) * u_light_intensity;
-			else return vec3(0.0);
-		}
+		if( shadow_depth < real_depth )
+			return false;
+
+		break;
 	}
+	return true;
+}
+
+bool isShadowed()	// returns if point is shadowed
+{
+	//project our 3D position to the shadowmap
+	vec4 proj_pos = u_shadow_viewproj * vec4(v_world_position,1.0);
+
+	//from homogeneus space to clip space
+	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+
+	//from clip space to uv space
+	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+	
+	//adaptative bias
+	vec3 N = normalize(v_normal);
+	vec3 L;
+	
+	bool dark_outside; //add or not light outside the shadow map zone
+	if(u_light_type == 0) {	//directional light
+		L = -normalize(u_light_direction);
+		dark_outside = false;
+	}
+	else if (u_light_type == 2){//spot
+		L =  normalize(u_light_position - v_world_position);
+		dark_outside = true;
+	}
+	else
+		return !getShadowFactorPointLight();
+
+	float NdotL = clamp(dot(N,L), 0.0, 1.0);
+	//compute the new adaptative bias
+	float adaptative_bias = u_shadow_bias * tan(acos(NdotL));
+	adaptative_bias = clamp(adaptative_bias, 0.0, 1.0);
+	
+	//get point depth (from -1 to 1)
+	float real_depth = (proj_pos.z - adaptative_bias) / proj_pos.w;
+
+	//normalize from [-1..+1] to [0..+1]
+	real_depth = real_depth * 0.5 + 0.5;
+	
+	//it is before near or behind far plane
+	if(real_depth < 0.0 || real_depth > 1.0)
+		return dark_outside;	
+	//it is outside on the sides
+	if(shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
+		return dark_outside;
+	
+	//read depth from depth buffer in [0..+1]
+	float shadow_depth = texture2D(u_shadowmap, shadow_uv).x;
+	
+	if( shadow_depth < real_depth )
+		return true;
+	
+	return false;
 }
 
 void main()
 {
-	vec2 uv = (gl_FragCoord.xy) * u_iRes.xy; //extract uvs from pixel screenpos
-	vec3 color = texture( u_color_texture, uv ).xyz;
+	vec4 color = u_color;
+	vec2 uv = v_uv;
+	vec2 uv_gbuffer = (gl_FragCoord.xy) * u_iRes.xy; //extract uvs from pixel screenpos
 	
-	//normals must be converted from 0..1 to -1..+1
-	vec3 N = texture( u_normal_texture, uv ).xyz * 2.0 - 1.0;
-	N = normalize(N); //always normalize in case of data loss
-	//reconstruct world position from depth and inv. viewproj
-	float depth = texture( u_depth_texture, uv ).x;
-	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
-	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
-	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
-
-	//here we can store the total amount of light
+	color *= texture( u_texture, uv * u_tiles_number);
+	float depth = texture( u_depth_texture, uv_gbuffer ).x;
+	
 	vec3 light = vec3(0.0);
 
-	//function that returns the light using phong
-	light = computeLight(light, N, worldpos);
+	if (depth < gl_FragCoord.z) {
+		discard;
+	}
+	
+	if (illumination_technique == 1) //PBR
+	{
+		//check if it is in shadow or not
+		if (!isShadowed())
+		{
+			vec3 lightParams = computeLight(light);
+			
+			#include "PBRForwardCode"
+
+			//function that returns the light using phong
+			light += direct * lightParams;
+		}
+	}
+	else //Phong
+	{
+		//check if it is in shadow or not
+		if (!isShadowed())
+			light += computeLight(light); //function that returns the light using phong
+	}
+	
+	light += texture2D(u_occlusion_texture, v_uv * u_tiles_number).x * u_ambient_light;
 	
 	//apply the light to the final pixel color
 	color.xyz *= light;
-
-	FragColor = vec4(color, 1.0);
-	return;
 	
+	FragColor = color;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
 
-
-\deferredPhongShadows.fs
+\deferredLightShadows.fs
 
 #version 330 core
 
-uniform sampler2D u_color_texture;
-uniform sampler2D u_normal_texture;
-uniform sampler2D u_emissive_texture;
-uniform sampler2D u_depth_texture;
-uniform mat4 u_inverse_viewprojection;
-uniform vec2 u_iRes;
+#include "getDeferredUniforms"
 
-uniform vec3 u_light_color;
-uniform int u_light_type;
-uniform vec3 u_light_direction;
-uniform vec3 u_light_position;
-uniform float u_light_maxdist;
-uniform float u_light_intensity;
-uniform float u_light_spotCosineCutoff;
-uniform float u_light_spotExponent;
+#include "getLightUniforms"
 
-uniform sampler2D u_shadowmap;
-uniform mat4 u_shadow_viewproj;
-uniform float u_shadow_bias;
-
-#define NUM_FACES 6
-uniform mat4 u_shadowmap_viewprojs[6];
+#include "getShadowUniforms"
 
 out vec4 FragColor;
 
-float getAttenuation(vec3 world_position)
-{	
-	//compute distance
-	float light_distance = length(u_light_position - world_position);
+#include "PBRFunctions"
 
-	//compute a linear attenuation factor
-	float att_factor = u_light_maxdist - light_distance;
-
-	//normalize factor
-	att_factor /= u_light_maxdist;
-
-	//ignore negative values
-	att_factor = max( att_factor, 0.0 );
-	
-	//quadratic att factor
-	att_factor *= att_factor;
-
-	//apply to amount of light
-	return att_factor;
-}
-
-vec3 getDirectionalLight(vec3 N)
-{
-	//if the light is a directional light the light vector is the same for all pixels
-	vec3 L = normalize(-u_light_direction);	//light vector goes in opposite direction
-		
-	//compute how much is aligned
-	float NdotL = dot(N,L);
-
-	//light cannot be negative (but the dot product can)
-	NdotL = clamp( NdotL, 0.0, 1.0 );
-	
-	return NdotL * u_light_color * u_light_intensity;
-}
-
-vec3 computeLight(vec3 light, vec3 normal, vec3 world_position)
-{
-	//very important to normalize as they come interpolated so normalization is lost
-	vec3 N = normalize(normal);
-	
-	if( u_light_type == 0 ) {	//directional  light
-		//store the amount of diffuse light
-		return getDirectionalLight(N);
-	}	
-	else //point and spot light
-	{
-		//light vector
-		vec3 L = normalize(u_light_position - world_position);
-		
-		//compute how much is aligned
-		float NdotL = dot(N,L);
-		
-		//light cannot be negative (but the dot product can)
-		NdotL = clamp( NdotL, 0.0, 1.0 );
-		light += (NdotL * u_light_color) * getAttenuation(world_position);
-		
-		if (u_light_type == 1)	{//point light
-			return light * u_light_intensity;
-		}	
-		else	//spot light
-		{
-			vec3 D = normalize(u_light_direction);
-			float spotCosine = dot(D,-L);
-			if (spotCosine >= u_light_spotCosineCutoff)
-				return light * pow(spotCosine,u_light_spotExponent) * u_light_intensity;
-			else return vec3(0.0);
-		}
-	}
-}
+#include "lightDeferredFunctions"
 
 bool getShadowFactorPointLight(vec3 world_position)
 {
@@ -1846,7 +1431,6 @@ bool getShadowFactorPointLight(vec3 world_position)
 
 		break;
 	}
-	
 	return true;
 }
 
@@ -1906,24 +1490,30 @@ bool isShadowed(vec3 world_position, vec3 normal)	// returns if point is shadowe
 
 void main()
 {
-	vec2 uv = (gl_FragCoord.xy) * u_iRes.xy; //extract uvs from pixel screenpos
-	vec3 color = texture( u_color_texture, uv ).xyz;
-	
-	//normals must be converted from 0..1 to -1..+1
-	vec3 N = texture( u_normal_texture, uv ).xyz * 2.0 - 1.0;
-	N = normalize(N); //always normalize in case of data loss
-	//reconstruct world position from depth and inv. viewproj
-	float depth = texture( u_depth_texture, uv ).x;
-	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
-	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
-	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+	#include "reconstructFromGBuffers"
 
 	//here we can store the total amount of light
 	vec3 light = vec3(0.0);
 	
-	//check if it is in shadow or not
-	if (!isShadowed(worldpos, N))
-		light += computeLight(light, N, worldpos); //function that returns the light using phong
+	if (illumination_technique == 1) //PBR
+	{
+		//check if it is in shadow or not
+		if (!isShadowed(worldpos, N))
+		{
+			vec3 lightParams = computeLight(light, N, worldpos);
+			
+			#include "PBRDeferredCode"
+
+			//function that returns the light using phong
+			light += direct * lightParams;
+		}
+	}
+	else //Phong
+	{
+		//check if it is in shadow or not
+		if (!isShadowed(worldpos, N))
+			light += computeLight(light, N, worldpos); //function that returns the light using phong
+	}
 
 	//apply the light to the final pixel color
 	color.xyz *= light;
@@ -1931,110 +1521,176 @@ void main()
 	FragColor = vec4(color, 1.0);
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
 
+\deferredBlendAAShadows.fs
 
-\deferredPhongAAShadows.fs
+#version 330
 
-#version 330 core
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
 
-uniform sampler2D u_color_texture;
-uniform sampler2D u_normal_texture;
-uniform sampler2D u_emissive_texture;
 uniform sampler2D u_depth_texture;
 uniform mat4 u_inverse_viewprojection;
 uniform vec2 u_iRes;
 
-uniform vec3 u_light_color;
-uniform int u_light_type;
-uniform vec3 u_light_direction;
-uniform vec3 u_light_position;
-uniform float u_light_maxdist;
-uniform float u_light_intensity;
-uniform float u_light_spotCosineCutoff;
-uniform float u_light_spotExponent;
+#include "getTextureUniforms"
 
-uniform sampler2DShadow u_shadowmap_AA;
-uniform sampler2D u_shadowmap;
-uniform mat4 u_shadow_viewproj;
-uniform float u_shadow_bias;
+#include "getLightUniforms"
 
-uniform float u_shadowmap_width;
-uniform float u_shadowmap_height;
-
-#define NUM_FACES 6
-uniform mat4 u_shadowmap_viewprojs[6];
+#include "getShadowUniforms"
 
 out vec4 FragColor;
 
-float getAttenuation(vec3 world_position)
-{	
-	//compute distance
-	float light_distance = length(u_light_position - world_position);
+#include "PBRFunctions"
 
-	//compute a linear attenuation factor
-	float att_factor = u_light_maxdist - light_distance;
+#include "lightForwardFunctions"
 
-	//normalize factor
-	att_factor /= u_light_maxdist;
-
-	//ignore negative values
-	att_factor = max( att_factor, 0.0 );
-	
-	//quadratic att factor
-	att_factor *= att_factor;
-
-	//apply to amount of light
-	return att_factor;
-}
-
-vec3 getDirectionalLight(vec3 N)
+float getShadowFactorPointLight()
 {
-	//if the light is a directional light the light vector is the same for all pixels
-	vec3 L = normalize(-u_light_direction);	//light vector goes in opposite direction
+	const float i_offset = 1.0 / 6.0;
+	for (int i = 0; i < 6; i++) {
 		
-	//compute how much is aligned
-	float NdotL = dot(N,L);
+		mat4 shadowmap_viewproj = mat4(1.0);
+		vec4 proj_pos = u_shadowmap_viewprojs[i] * vec4(v_world_position,1.0);
+		vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+		shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+		//it is outside on the sides, try next face
+		if(shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
+			continue;
 
-	//light cannot be negative (but the dot product can)
-	NdotL = clamp( NdotL, 0.0, 1.0 );
-	
-	return NdotL * u_light_color * u_light_intensity;
-}
+		shadow_uv.x *= i_offset;
+		shadow_uv.x += i_offset * float(i);
+		
+		float real_depth = (proj_pos.z - u_shadow_bias) / proj_pos.w;
+		real_depth = real_depth * 0.5 + 0.5;
+		
+		float shadow_depth = texture2D(u_shadowmap, shadow_uv).x;
 
-vec3 computeLight(vec3 light, vec3 normal, vec3 world_position)
-{
-	//very important to normalize as they come interpolated so normalization is lost
-	vec3 N = normalize(normal);
-	
-	if( u_light_type == 0 ) {	//directional  light
-		//store the amount of diffuse light
-		return getDirectionalLight(N);
-	}	
-	else //point and spot light
-	{
-		//light vector
-		vec3 L = normalize(u_light_position - world_position);
+		if(real_depth < 0.0 || real_depth > 1.0)
+			return 0.0;
 		
-		//compute how much is aligned
-		float NdotL = dot(N,L);
-		
-		//light cannot be negative (but the dot product can)
-		NdotL = clamp( NdotL, 0.0, 1.0 );
-		light += (NdotL * u_light_color) * getAttenuation(world_position);
-		
-		if (u_light_type == 1)	{//point light
-			return light * u_light_intensity;
-		}	
-		else	//spot light
-		{
-			vec3 D = normalize(u_light_direction);
-			float spotCosine = dot(D,-L);
-			if (spotCosine >= u_light_spotCosineCutoff)
-				return light * pow(spotCosine,u_light_spotExponent) * u_light_intensity;
-			else return vec3(0.0);
-		}
+		if( shadow_depth < real_depth )
+			return 0.0;
+
+		break;
 	}
+	return 1.0;
 }
+
+float getShadowFactor()	// returns if point is shadowed
+{
+	//project our 3D position to the shadowmap
+	vec4 proj_pos = u_shadow_viewproj * vec4(v_world_position, 1.0);
+
+	//from homogeneous space to clip space
+	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+
+	//from clip space to uv space
+	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+
+	//adaptative bias
+	vec3 N = normalize(v_normal);
+	vec3 L;
+	if(u_light_type == 0) //directional light
+		L = -normalize(u_light_direction);
+	else if (u_light_type == 1)
+		return getShadowFactorPointLight();
+	else //spot
+		L =  normalize(u_light_position - v_world_position);
+		
+	float NdotL = clamp(dot(N,L), 0.0, 1.0);
+	//compute the new adaptative bias
+	float adaptative_bias = u_shadow_bias * tan(acos(NdotL));
+	adaptative_bias = clamp(adaptative_bias, 0.0, 1.0);
+
+	//get point depth (from -1 to 1)
+	float real_depth = (proj_pos.z - u_shadow_bias) / proj_pos.w;
+
+	//normalize from [-1..+1] to [0..+1] (z)
+	real_depth = real_depth * 0.5 + 0.5;
+
+	//it is outside on the sides
+	if(	shadow_uv.x < 0.0 || shadow_uv.x > 1.0 ||
+	shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
+			return 1.0;
+	//it is before near or behind far plane
+	if(real_depth < 0.0 || real_depth > 1.0)
+		return 1.0;
+	
+	float xOffset = 1.0/u_shadowmap_width;
+    float yOffset = 1.0/u_shadowmap_height;
+
+	float Factor = 0.0;
+
+    for (int y = -1 ; y <= 1 ; y++) {
+        for (int x = -1 ; x <= 1 ; x++) {
+            vec2 Offsets = vec2(x * xOffset, y * yOffset);
+            vec3 UVC = vec3(shadow_uv + Offsets, real_depth);
+            Factor += texture(u_shadowmap_AA, UVC);
+        }
+    }
+
+    return (0.5 + (Factor / 18.0));
+}
+
+void main()
+{
+	vec4 color = u_color;
+	vec2 uv = v_uv;
+	vec2 uv_gbuffer = (gl_FragCoord.xy) * u_iRes.xy; //extract uvs from pixel screenpos
+	
+	color *= texture( u_texture, uv * u_tiles_number);
+	float depth = texture( u_depth_texture, uv_gbuffer ).x;
+	
+	vec3 light = vec3(0.0);
+
+	if (depth < gl_FragCoord.z) {
+		discard;
+	}
+	
+	float shadowFact = getShadowFactor();
+
+	if (illumination_technique == 1) //PBR
+	{
+		vec3 lightParams = shadowFact * computeLight(light);
+		
+		#include "PBRForwardCode"
+
+		//function that returns the light using phong
+		light += direct * lightParams;
+	}
+	else //Phong
+		light += shadowFact * computeLight(light);
+	
+	light += texture2D(u_occlusion_texture, v_uv * u_tiles_number).x * u_ambient_light;
+	
+	//apply the light to the final pixel color
+	color.xyz *= light;
+	
+	FragColor = color;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\deferredLightAAShadows.fs
+
+#version 330 core
+
+#include "getDeferredUniforms"
+
+#include "getLightUniforms"
+
+#include "getShadowUniforms"
+
+out vec4 FragColor;
+
+#include "PBRFunctions"
+
+#include "lightDeferredFunctions"
+
+#include "gammaFunctions"
 
 float getShadowFactorPointLight(vec3 world_position)
 {
@@ -2078,7 +1734,6 @@ float getShadowFactorPointLight(vec3 world_position)
 
 		return (0.5 + (Factor / 18.0));
 	}
-	
 	return 1.0;
 }
 
@@ -2144,26 +1799,44 @@ float getShadowFactor(vec3 world_position, vec3 normal)	// returns if point is s
 
 void main()
 {
-	vec2 uv = (gl_FragCoord.xy) * u_iRes.xy; //extract uvs from pixel screenpos
-	vec3 color = texture( u_color_texture, uv ).xyz;
-	
-	//normals must be converted from 0..1 to -1..+1
-	vec3 N = texture( u_normal_texture, uv ).xyz * 2.0 - 1.0;
-	N = normalize(N); //always normalize in case of data loss
-	//reconstruct world position from depth and inv. viewproj
-	float depth = texture( u_depth_texture, uv ).x;
-	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
-	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
-	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+	#include "reconstructFromGBuffers"
 
 	//here we can store the total amount of light
 	vec3 light = vec3(0.0);
-	
+
 	float shadowFact = getShadowFactor(worldpos, N);
-	light += shadowFact * computeLight(light, N, worldpos); //function that returns the light using phong
+
+	if (illumination_technique == 1) //PBR
+	{
+		vec3 lightParams = shadowFact * computeLight(light, N, worldpos);
+		
+		#include "PBRDeferredCode"
+
+		//function that returns the light using phong
+		light += direct * lightParams;
+	}
+	else //Phong
+		light += shadowFact * computeLight(light, N, worldpos);
 
 	//apply the light to the final pixel color
 	color.xyz *= light;
 
 	FragColor = vec4(color, 1.0);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+\degammaDeferred.fs
+
+in vec2 v_uv;
+
+uniform sampler2D u_texture;
+out vec4 FragColor;
+
+#include "gammaFunctions"
+
+void main()
+{
+	vec4 color = texture(u_texture, v_uv);
+	FragColor = vec4(degamma(color.xyz), color.w);
 }

@@ -3,6 +3,8 @@
 
 #include "includes.h"
 #include "texture.h"
+#include "utils.h"
+#include "application.h"
 
 using namespace GTR;
 
@@ -28,7 +30,13 @@ void Material::setUniforms(Shader* shader, bool is_first_pass) {
 	Texture* black_tex = Texture::getBlackTexture();
 	Texture* white_tex = Texture::getWhiteTexture();
 
-	if (!color_texture)
+	//if (color) color = Vector4(1.0, 1.0, 1.0, 1.0);
+	if (Application::instance->use_gamma_correction)
+		shader->setUniform("u_color", Vector4(gamma(color.xyz), color.w));
+	else
+		shader->setUniform("u_color", color);
+
+	if (!color_texture || !is_first_pass)
 		shader->setUniform("u_texture", white_tex, 1);
 	else
 		shader->setUniform("u_texture", color_texture, 1);
@@ -43,7 +51,7 @@ void Material::setUniforms(Shader* shader, bool is_first_pass) {
 	else
 		shader->setUniform("u_occlusion_texture", occlusion_texture, 3);
 
-	shader->setUniform("u_color", color);
+	shader->setUniform("u_color", Vector4(gamma(color.xyz), color.w));
 	shader->setUniform("u_tiles_number", tiles_number);
 
 	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)

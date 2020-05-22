@@ -32,6 +32,7 @@ public:
 	bool render_gui;
 	
 	bool rendering_shadowmap;
+	bool use_gamma_correction;
 
 	GTR::Light* light_selected;
 	GTR::PrefabEntity* prefab_selected;
@@ -42,6 +43,10 @@ public:
 	const char* element_names[Element_COUNT] = { "Forward", "Deferred" };
 	int current_pipeline;
 
+	enum Illuminations { PHONG, PBR, Illuminations_COUNT };
+	const char* illuminations_names[Illuminations_COUNT] = { "Phong", "PBR" };
+	int current_illumination;
+
 	FBO* gbuffers_fbo;
 	FBO* illumination_fbo;
 
@@ -51,7 +56,7 @@ public:
 
 	Application( int window_width, int window_height, SDL_Window* window );
 
-	void createScene();
+	void createScene(Vector3 offset);
 
 	//main functions
 	void render( void );

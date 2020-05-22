@@ -33,6 +33,8 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	render_gui = true;
 
 	render_wireframe = false;
+	use_gamma_correction = true;
+	use_gamma_correction = false;
 
 	fps = 0;
 	frame = 0;
@@ -42,6 +44,9 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 
 	prefab_selected = NULL;
 	light_selected = NULL;
+
+	current_pipeline = DEFERRED;
+	current_illumination = PBR;
 
 	Vector3 offset = Vector3(0, -1000, 0);
 
@@ -55,8 +60,6 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	camera = new Camera();
 	camera->lookAt(Vector3(-150.f, 150.0f, 250.f) + offset, Vector3(0.f, 0.0f, 0.f) + offset, Vector3(0.f, 1.f, 0.f));
 	camera->setPerspective( 45.f, window_width/(float)window_height, 1.0f, 10000.f);
-
-	current_pipeline = DEFERRED;
 
 	//initialize GBuffers for deferred (create FBO)
 	gbuffers_fbo = new FBO();
@@ -75,79 +78,45 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	illumination_fbo->create(window_width, window_height,
 		1, 			//three textures
 		GL_RGB, 		//three channels
-		GL_UNSIGNED_BYTE, //1 byte
+		GL_FLOAT, //1 byte
 		false);		//add depth_texture
 
 	//This class will be the one in charge of rendering all 
 	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor
 
-	//createScene();
-	
-	GTR::Node plane_node = GTR::Node();
-	plane_node.mesh = new Mesh();
-	plane_node.mesh->createPlane(2048.0);
-#ifdef _DEBUG
-	plane_node.material = new GTR::Material();
-#else
-	plane_node.material = new GTR::Material(Texture::Get("data/textures/asphalt.png"));
-#endif
-
-	plane_node.material->name = "Road";
-	plane_node.material->tiles_number = 4.4;
-
-	GTR::Prefab* plane_prefab = new GTR::Prefab();
-	plane_prefab->name = "Floor";
-	plane_prefab->root = plane_node;
-
-	GTR::Scene* scene = new GTR::Scene();
-	GTR::Prefab* car = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
-	scene->AddEntity(new GTR::PrefabEntity(plane_prefab, offset));
-	scene->AddEntity(new GTR::PrefabEntity(car, offset));
-	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(300, 0, 100) + offset, Vector3(0, 45, 0)));
-
-	GTR::Light* sun = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0) + offset, Vector3(-0.3, -0.6, -0.1), "Sun", GTR::DIRECTIONAL);
-	sun->intensity = 0.3;
-	sun->cast_shadows = false;
-
-	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(0, 380, 0) + offset, Vector3(0, -0.9, 0.1), "Point", GTR::POINT);
-	light1->cast_shadows = true;
-	light1->intensity = 20;
-	light1->updateLightCamera();
-
-	GTR::Light* light2 = new GTR::Light(Color::TURQUESE, Vector3(300, 300, 0) + offset, Vector3(0, -0.7, 0.3), "Spot", GTR::SPOT);
-	light2->cast_shadows = true;
-	light2->intensity = 20;
-	light2->updateLightCamera();
-
-	scene->AddEntity(sun);
-	scene->AddEntity(light1);
-	scene->AddEntity(light2);
-
+	createScene(offset);
 
 	//hide the cursor
 	SDL_ShowCursor(!mouse_locked); //hide or show the mouse
 }
 
-void Application::createScene()
+void Application::createScene(Vector3 offset)
 {
 	//initialize scene
 	GTR::Scene* scene = new GTR::Scene();
 
 	//Load lights (the constructor adds them automatically to the scene)
-	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(-1280, 380, 510), Vector3(0, 0, 1), "Point", GTR::POINT);
+	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(-1280, 380, 510) + offset, Vector3(0, 0, 1), "Point", GTR::POINT);
 	light1->max_distance = 1500;
+	light1->intensity = 20;
 	light1->updateLightCamera();
-	//light1->intensity = 500;
-	GTR::Light* light2 = new GTR::Light(Color::GREEN, Vector3(120, 830, -120), Vector3(0.4, -0.85, 0.34), "Spot house", GTR::SPOT);
-	light2->setCutoffAngle(65.0);
 
-	GTR::Light* light3 = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0), Vector3(0, -0.1, -0.8), "Sun", GTR::DIRECTIONAL);
+	GTR::Light* light2 = new GTR::Light(Color::GREEN, Vector3(120, 830, -120) + offset, Vector3(0.4, -0.85, 0.34), "Spot house", GTR::SPOT);
+	light2->setCutoffAngle(65.0);
+	light2->intensity = 20;
+	light2->max_distance = 1300;
+
+
+	GTR::Light* light3 = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0) + offset, Vector3(0, -0.9, -0.2), "Sun", GTR::DIRECTIONAL);
 	light3->max_distance = 1500;
 	light3->ortho_cam_size = 2000;
+	light3->intensity = 4;
 	light3->updateLightCamera();
 
-	GTR::Light* light4 = new GTR::Light(Color::TURQUESE, Vector3(1520, 330, -175), Vector3(-0.23, -0.5, 0.8), "Spot cars", GTR::SPOT);
+	GTR::Light* light4 = new GTR::Light(Color::TURQUESE, Vector3(1520, 330, -175) + offset, Vector3(-0.23, -0.5, 0.8), "Spot cars", GTR::SPOT);
 	light4->setCutoffAngle(22.0);
+	light4->intensity = 20;
+	light4->max_distance = 1700;
 
 	//Add lights into scene
 	scene->AddEntity(light3);
@@ -169,7 +138,7 @@ void Application::createScene()
 	plane_prefab->root = plane_node;
 
 	GTR::Prefab* car = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
-	GTR::Prefab* lowres_car = GTR::Prefab::Get("data/prefabs/gmc_lowres/lowres_scene.gltf");
+	//GTR::Prefab* lowres_car = GTR::Prefab::Get("data/prefabs/gmc_lowres/lowres_scene.gltf");
 	GTR::Prefab* lamp = GTR::Prefab::Get("data/prefabs/lamp/scene.gltf");
 	lamp->root.model.scale(50, 50, 50);
 	GTR::Prefab* house = GTR::Prefab::Get("data/prefabs/house/scene.gltf");
@@ -178,17 +147,27 @@ void Application::createScene()
 
 	//Add to prefabs list
 	//scene->AddEntity(new GTR::PrefabEntity(sphere_prefab, light1->model.getTranslation()));
-	scene->AddEntity(new GTR::PrefabEntity(plane_prefab));
-	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(0, 0, 0), Vector3(0, 0, 0), "Car 1", lowres_car));
-	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(200, 0, 60), Vector3(0, 40, 0), "Car 2", lowres_car));
-	scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(150, 0, 200), Vector3(0, 90, 0)));
-	scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(0, 0, 200), Vector3(0, 0, 0)));
-	scene->AddEntity(new GTR::PrefabEntity(house, Vector3(250, 0, 100)));
+	scene->AddEntity(new GTR::PrefabEntity(plane_prefab, offset));
+	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(0, 0, 0) + offset, Vector3(0, 0, 0), "Car 1"));
+	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(200, 0, 60) + offset, Vector3(0, 40, 0), "Car 2"));
+	scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(150, 0, 200) + offset, Vector3(0, 90, 0)));
+	scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(0, 0, 200) + offset, Vector3(0, 0, 0)));
+	scene->AddEntity(new GTR::PrefabEntity(house, Vector3(250, 0, 100) + offset));
 
 	for (int i = 0; i < 5; i++) {
 		for (int j = 0; j < 5; j++) {
-			scene->AddEntity(new GTR::PrefabEntity(car, Vector3(1000 + i * 150, 0, j * 300), Vector3(0, 0, 0), "Car Parking", lowres_car));
-			scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(-1000 - i * 200 + random(50, -25), 0, j * 200 + random(50, -25)), Vector3(0, 60 * (i + j), 0)));
+			scene->AddEntity(new GTR::PrefabEntity(car, Vector3(1000 + i * 150, 0, j * 300) + offset, Vector3(0, 0, 0), "Car Parking"));
+			scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(-1000 - i * 200 + random(50, -25), 0, j * 200 + random(50, -25)) + offset, Vector3(0, 60 * (i + j), 0)));
+		}
+	}
+
+	int num_per_side = 5;
+	float plane_size = 2048.0;
+	for (int i = 0; i < num_per_side; i++) {
+		for (int j = 0; j < num_per_side; j++) {
+			GTR::Light* light = new GTR::Light(Color::PINK, Vector3((i+0.5) * plane_size * 2 / num_per_side + random(25, 0) - plane_size, 100, (j+0.5) * plane_size * 2 / num_per_side + random(25, 0) - plane_size) + offset, Vector3(0,-0.9,0.2), "light", GTR::POINT, 25.0f);
+			light->cast_shadows = false;
+			scene->AddEntity(light);
 		}
 	}
 }
@@ -197,9 +176,9 @@ void Application::createScene()
 void Application::render(void)
 {
 	GTR::Scene* scene = GTR::Scene::instance;
+	scene->forward_for_blends = false;
 	
 	if (current_pipeline == DEFERRED) {
-		scene->forward_for_blends = false;
 		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
 		renderer->renderGBuffers(scene, camera);
 		renderer->renderIlluminationToBuffer(camera);
@@ -210,7 +189,10 @@ void Application::render(void)
 		renderer->setDefaultGLFlags();
 
 		glDisable(GL_DEPTH_TEST);
-		illumination_fbo->color_textures[0]->toViewport();
+		if (use_gamma_correction)
+			illumination_fbo->color_textures[0]->toViewport(Shader::Get("degammaDeferred"));
+		else
+			illumination_fbo->color_textures[0]->toViewport();
 
 		renderer->showSceneShadowmaps(shadow_caster_lights);
 
@@ -239,6 +221,22 @@ void Application::renderDebugGUI(void)
 
 	const char* current_element_name = (current_pipeline >= 0 && current_pipeline < Element_COUNT) ? element_names[current_pipeline] : "Unknown";
 	ImGui::SliderInt("Rendering Pipeline", &current_pipeline, 0, Element_COUNT - 1, current_element_name);
+
+	const char* current_illumination_name = (current_illumination >= 0 && current_illumination < Illuminations_COUNT) ? illuminations_names[current_illumination] : "Unknown";
+	if (ImGui::SliderInt("Illumination Technique", &current_illumination, 0, Illuminations_COUNT - 1, current_illumination_name)) {
+		float compensation_factor;
+		if (current_illumination == PBR)
+			compensation_factor = 10.0;
+		else
+			compensation_factor = 1 / 10.0;
+
+		for (GTR::Light* light : GTR::Scene::instance->lights)
+			light->intensity *= compensation_factor;
+	}
+			
+
+	ImGui::Checkbox("Gamma Correction", &use_gamma_correction);
+
 	ImGui::Checkbox("Wireframe", &render_wireframe);
 
 	//add info to the debug panel about the camera
@@ -247,10 +245,11 @@ void Application::renderDebugGUI(void)
 		ImGui::TreePop();
 	}
 
+	ImGui::Separator();
+
 	//add info to the debug panel about the scene
-	if (ImGui::TreeNode(scene, "Scene")) {
+	if (ImGui::CollapsingHeader("Scene")) {
 		scene->renderInMenu();
-		ImGui::TreePop();
 	}
 
 	#endif
@@ -476,5 +475,20 @@ void Application::onResize(int width, int height)
 	camera->aspect =  width / (float)height;
 	window_width = width;
 	window_height = height;
+
+	//Update FBO's
+	gbuffers_fbo->~FBO();
+	gbuffers_fbo->create(window_width, window_height,
+		3, 	
+		GL_RGBA, 	
+		GL_UNSIGNED_BYTE, 
+		true);
+
+	illumination_fbo->~FBO();
+	illumination_fbo->create(window_width, window_height,
+		1, 	
+		GL_RGB, 	
+		GL_UNSIGNED_BYTE,
+		false);	
 }
 

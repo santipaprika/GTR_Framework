@@ -26,6 +26,7 @@ Scene::Scene()
 	use_geometry_on_deferred = true;
 	show_deferred_light_geometry = false;
 	forward_for_blends = false;
+	show_ssao = false;
 }
 
 void Scene::AddEntity(BaseEntity* entity)
@@ -53,6 +54,7 @@ void Scene::renderInMenu()
 	if (Application::instance->current_pipeline == Application::DEFERRED)
 	{
 		ImGui::Checkbox("Show GBuffers", &show_gbuffers);
+		ImGui::Checkbox("Show SSAO", &show_ssao);
 		ImGui::Checkbox("Use Geometry", &use_geometry_on_deferred);
 		if (use_geometry_on_deferred)
 			ImGui::Checkbox("Show Light Geometry", &show_deferred_light_geometry);

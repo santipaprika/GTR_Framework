@@ -33,6 +33,7 @@ public:
 	
 	bool rendering_shadowmap;
 	bool use_gamma_correction;
+	bool use_ssao;
 
 	GTR::Light* light_selected;
 	GTR::PrefabEntity* prefab_selected;
@@ -49,6 +50,13 @@ public:
 
 	FBO* gbuffers_fbo;
 	FBO* illumination_fbo;
+	
+	// SSAO
+	FBO* ssao_fbo;
+	Texture* ssao_blur;
+	std::vector<Vector3> random_points;
+	int kernel_size;
+	float sphere_radius;
 
 	//some vars
 	bool mouse_locked; //tells if the mouse is locked (blocked in the center and not visible)

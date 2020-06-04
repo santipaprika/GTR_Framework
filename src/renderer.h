@@ -21,9 +21,13 @@ namespace GTR {
 
 		void renderToGBuffers(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
 
-		void showGBuffers();
+		void renderSSAO(Camera* camera);
 
 		void renderIlluminationToBuffer(Camera* camera);
+
+		void showGBuffers();
+
+		void showSSAO();
 
 		// MULTIPASS
 

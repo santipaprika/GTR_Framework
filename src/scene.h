@@ -32,6 +32,7 @@ namespace GTR {
 		bool use_geometry_on_deferred;
 		bool show_deferred_light_geometry;
 		bool forward_for_blends;
+		bool show_ssao;
 
 		//ctor
 		Scene();

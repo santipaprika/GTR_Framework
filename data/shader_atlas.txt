@@ -25,6 +25,9 @@ deferredBlendShadows basic.vs deferredBlendShadows.fs
 deferredBlendAAShadows basic.vs deferredBlendAAShadows.fs
 // degamma shader
 degammaDeferred quad.vs degammaDeferred.fs
+// screen space ambient occlusion
+ssao quad.vs ssao.fs
+blur quad.vs blur.fs
  
 // -------------------------------------------------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1089,6 +1092,8 @@ void main()
 #include "getDeferredUniforms"
 
 uniform vec3 u_ambient_light;
+uniform sampler2D u_ssao_texture;
+uniform bool u_use_ssao;
 
 uniform vec3 u_light_color;
 uniform int u_light_type;
@@ -1117,8 +1122,22 @@ void main()
 	#include "reconstructFromGBuffers"
 	
 	vec3 light = vec3(0.0);
-	light += texture(u_emissive_texture, uv).w * u_ambient_light; // ambient
-	light += getDirectionalLight(N);
+
+	if (u_use_ssao)
+	{
+		//read the ao_factor for this pixel
+		float ao_factor = texture( u_ssao_texture, uv ).x;
+
+		//we could play with the curve to have more control
+		ao_factor = pow( ao_factor, 3.0 );
+
+		//weight the ambient light by it
+		light += ao_factor * u_ambient_light;
+	}
+	else 
+		light += texture(u_emissive_texture, uv).w * u_ambient_light;
+	
+	//light += getDirectionalLight(N);
 	
 	color *= light;
 	
@@ -1841,4 +1860,121 @@ void main()
 {
 	vec4 color = texture(u_texture, v_uv);
 	FragColor = vec4(degamma(color.xyz), color.w);
+}
+
+
+\ssao.fs
+
+#version 330 core
+
+in vec2 v_uv;
+
+#include "getDeferredUniforms"
+uniform vec3[100] u_points;
+uniform mat4 u_viewprojection;
+uniform float u_radius;
+
+out vec4 FragColor;
+
+mat3 cotangent_frame(vec3 N, vec3 p, vec2 uv)
+{
+	// get edge vectors of the pixel triangle
+	vec3 dp1 = dFdx( p );
+	vec3 dp2 = dFdy( p );
+	vec2 duv1 = dFdx( uv );
+	vec2 duv2 = dFdy( uv );
+	
+	// solve the linear system
+	vec3 dp2perp = cross( dp2, N );
+	vec3 dp1perp = cross( N, dp1 );
+	vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+	vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+ 
+	// construct a scale-invariant frame 
+	float invmax = inversesqrt( max( dot(T,T), dot(B,B) ) );
+	return mat3( T * invmax, B * invmax, N );
+}
+
+void main()
+{
+    //we want to center the sample in the center of the pixel
+    vec2 uv = v_uv + u_iRes;
+
+    //read depth from depth buffer
+    float depth = texture( u_depth_texture, uv ).x;
+	vec3 normal = texture( u_normal_texture, uv ).xyz * 2.0 - 1.0;
+	normal = normalize(normal);
+
+    //ignore pixels in the background
+    if(depth >= 1.0)
+    {
+        FragColor = vec4(1.0);
+        return;
+    }
+
+    //create screenpos with the right depth
+    vec4 screen_position = vec4(uv * 2.0 - vec2(1.0), depth * 2.0 - 1.0, 1.0);
+
+    //reproject
+    vec4 proj_worldpos = u_inverse_viewprojection * screen_position;
+    vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+
+    //lets use 64 samples
+    const int samples = 64;
+    int num = samples; //num samples that passed the are outside
+
+    //for every sample around the point
+    for( int i = 0; i < samples; ++i )
+    {
+		//to create the matrix33 to convert from tangent to world
+		mat3 rotmat = cotangent_frame( normal, worldpos, uv );
+
+		//rotate a point is easy
+		vec3 rotated_point = rotmat * u_points[i];
+
+        //compute is world position using the random
+        vec3 p = worldpos + rotated_point * u_radius;
+        //find the uv in the depth buffer of this point
+        vec4 proj = u_viewprojection * vec4(p,1.0);
+        proj.xy /= proj.w; //convert to clipspace from homogeneous
+        //apply a tiny bias to its z before converting to clip-space
+        proj.z = (proj.z - 0.005) / proj.w;
+        proj.xyz = proj.xyz * 0.5 + vec3(0.5); //to [0..1]
+        //read p true depth
+        float pdepth = texture( u_depth_texture, proj.xy ).x;
+        //compare true depth with its depth
+        if( pdepth < proj.z ) //if true depth smaller, is inside
+            num--; //remove this point from the list of visible
+    }
+
+    //finally, compute the AO factor accordingly
+    float ao = float(num) / float(samples);
+
+    FragColor = vec4(ao, ao, ao, 1.0);
+
+}
+
+
+\blur.fs
+
+#version 330 core
+
+in vec2 v_uv;
+
+uniform sampler2D u_texture;
+uniform int u_kernel_size;
+uniform vec2 u_offset;
+
+out vec4 FragColor;
+
+void main ()
+{
+	vec2 uv = v_uv;
+	vec4 color = vec4(0.0);
+	int half_kernel = int(floor(u_kernel_size/2.0));
+	for (int i = -half_kernel; i <= half_kernel; i++)
+		for (int j = -half_kernel; j <= half_kernel; j++)
+			color += texture2D(u_texture, uv + u_offset * vec2(i,j));
+	color /= pow(u_kernel_size, 2);
+	FragColor = color;
 }

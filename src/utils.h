@@ -54,4 +54,8 @@ char* fetchBufferVec4(char* data, std::vector<Vector4>& vector);
 
 Vector3 pow(Vector3 base, Vector3 exponent);
 
+namespace GTR {
+	std::vector<Vector3> generateSpherePoints(int num, float radius, bool hemi);
+}
+
 #endif

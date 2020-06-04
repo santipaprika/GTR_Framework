@@ -72,31 +72,70 @@ void Renderer::renderToGBuffers(const Matrix44 model, Mesh* mesh, GTR::Material*
 	shader->disable();
 }
 
-void Renderer::showGBuffers()
+void Renderer::renderSSAO(Camera* camera)
 {
 	Application* application = Application::instance;
-	float window_width = application->window_width;
-	float window_height = application->window_height;
 
-	glDisable(GL_DEPTH_TEST);
+	////bind the texture we want to change
+	//application->gbuffers_fbo->depth_texture->bind();
 
-	glViewport(0, window_height * 0.5, window_width * 0.5, window_height * 0.5);
-	if (application->use_gamma_correction)
-		application->gbuffers_fbo->color_textures[0]->toViewport(Shader::Get("degammaDeferred"));
-	else
-		application->gbuffers_fbo->color_textures[0]->toViewport();
+	////disable using mipmaps
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-	glViewport(window_width * 0.5, window_height * 0.5, window_width * 0.5, window_height * 0.5);
-	application->gbuffers_fbo->color_textures[1]->toViewport();
+	////enable bilinear filtering
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	glViewport(0, 0, window_width * 0.5, window_height * 0.5);
-	application->gbuffers_fbo->color_textures[2]->toViewport();
+	//application->gbuffers_fbo->depth_texture->unbind();
 
-	Shader* shader = Shader::Get("depth");
+	//start rendering inside the ssao texture
+	application->ssao_fbo->bind();
+
+	application->ssao_fbo->enableSingleBuffer(0);
+	glClearColor(0.0, 0.0, 0.0, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	application->ssao_fbo->enableAllBuffers();
+
+	//get the shader for SSAO (remember to create it using the atlas)
+	Shader* shader = Shader::Get("ssao");
 	shader->enable();
-	shader->setUniform("u_camera_nearfar", Vector2(application->camera->near_plane, application->camera->far_plane));
-	glViewport(window_width * 0.5, 0, window_width * 0.5, window_height * 0.5);
-	application->gbuffers_fbo->depth_texture->toViewport(shader);
+
+	Matrix44 inv_vp = camera->viewprojection_matrix;
+	inv_vp.inverse();
+
+	//send info to reconstruct the world position
+	shader->setUniform("u_inverse_viewprojection", inv_vp);
+	shader->setTexture("u_depth_texture", application->gbuffers_fbo->depth_texture, 0);
+	//we need the pixel size so we can center the samples 
+	shader->setUniform("u_iRes", Vector2(1.0 / (float)application->gbuffers_fbo->depth_texture->width, 1.0 / (float)application->gbuffers_fbo->depth_texture->height));
+	//we will need the viewprojection to obtain the uv in the depthtexture of any random position of our world
+	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+
+	//send random points so we can fetch around
+	shader->setUniform3Array("u_points", (float*)&application->random_points[0], application->random_points.size());
+	shader->setUniform("u_radius", application->sphere_radius);
+
+	//render fullscreen quad
+	Mesh* quad = Mesh::getQuad();
+	quad->render(GL_TRIANGLES);
+
+	//stop rendering to the texture
+	application->ssao_fbo->unbind();
+
+	shader->disable();
+
+	// Blur
+	//get the shader for SSAO (remember to create it using the atlas)
+	Shader* blur_shader = Shader::Get("blur");
+	blur_shader->enable();
+
+	blur_shader->setTexture("u_texture", application->ssao_fbo->color_textures[0], 0);
+	blur_shader->setUniform("u_kernel_size", application->kernel_size);
+	blur_shader->setUniform("u_offset", Vector2(1.0/application->ssao_fbo->color_textures[0]->width, 1.0/application->ssao_fbo->color_textures[0]->height));
+
+	application->ssao_fbo->color_textures[0]->copyTo(application->ssao_blur, blur_shader);
+
+	blur_shader->disable();
+
 }
 
 void Renderer::renderIlluminationToBuffer(Camera* camera)
@@ -142,14 +181,10 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 		sh->setUniform("u_ambient_light", gamma(scene->ambient_light) * scene->ambient_power);
 	else
 		sh->setUniform("u_ambient_light", scene->ambient_light * scene->ambient_power);
-	
-	/*for (auto light : scene_lights)
-	{
-		if (light->name == "Sun") {
-			light->setLightUniforms(sh);
-			break;
-		}
-	}*/
+
+	sh->setUniform("u_use_ssao", Application::instance->use_ssao);
+	if (Application::instance->use_ssao)
+		sh->setUniform("u_ssao_texture", Application::instance->ssao_blur, 4);
 
 	glDisable(GL_BLEND);
 	glDisable(GL_DEPTH_TEST);
@@ -240,6 +275,40 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 		shader->disable();
 	}
 
+}
+
+void Renderer::showGBuffers()
+{
+	Application* application = Application::instance;
+	float window_width = application->window_width;
+	float window_height = application->window_height;
+
+	glDisable(GL_DEPTH_TEST);
+
+	glViewport(0, window_height * 0.5, window_width * 0.5, window_height * 0.5);
+	if (application->use_gamma_correction)
+		application->gbuffers_fbo->color_textures[0]->toViewport(Shader::Get("degammaDeferred"));
+	else
+		application->gbuffers_fbo->color_textures[0]->toViewport();
+
+	glViewport(window_width * 0.5, window_height * 0.5, window_width * 0.5, window_height * 0.5);
+	application->gbuffers_fbo->color_textures[1]->toViewport();
+
+	glViewport(0, 0, window_width * 0.5, window_height * 0.5);
+	application->gbuffers_fbo->color_textures[2]->toViewport();
+
+	Shader* shader = Shader::Get("depth");
+	shader->enable();
+	shader->setUniform("u_camera_nearfar", Vector2(application->camera->near_plane, application->camera->far_plane));
+	glViewport(window_width * 0.5, 0, window_width * 0.5, window_height * 0.5);
+	application->gbuffers_fbo->depth_texture->toViewport(shader);
+}
+
+void Renderer::showSSAO()
+{
+	Application* application = Application::instance;
+	glViewport(0, 0, application->window_width, application->window_height);
+	application->ssao_blur->toViewport();
 }
 
 //FORWARD

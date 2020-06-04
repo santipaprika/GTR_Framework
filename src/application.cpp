@@ -33,8 +33,10 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	render_gui = true;
 
 	render_wireframe = false;
-	use_gamma_correction = true;
 	use_gamma_correction = false;
+	use_ssao = true;
+	kernel_size = 2;
+	sphere_radius = 1.0f;
 
 	fps = 0;
 	frame = 0;
@@ -81,6 +83,14 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 		GL_FLOAT, //1 byte
 		false);		//add depth_texture
 
+	//let's create an FBO to render the AO inside
+	ssao_fbo = new FBO();
+	ssao_fbo->create(window_width/1, window_height/1);
+
+	//maybe we want to create also one for the blur, in this case just create a texture
+	ssao_blur = new Texture();
+	ssao_blur->create(window_width/1, window_height/1);
+
 	//This class will be the one in charge of rendering all 
 	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor
 
@@ -101,12 +111,14 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	GTR::Prefab* floor = new GTR::Prefab();
 	floor->root = plane_node;
 	floor->name = "Floor_Node";
-	scene->AddEntity(new GTR::PrefabEntity(floor, Vector3(0,0,0), Vector3(0,0,0), "Floor"));
+	scene->AddEntity(new GTR::PrefabEntity(floor, Vector3(0,-27,0), Vector3(0,0,0), "Floor"));
 
 	GTR::Light* spot_light = new GTR::Light(Color::WHITE, Vector3(0, 500, 0), Vector3(0, -0.8, 0.2), "Spot Light", GTR::SPOT);
 	spot_light->intensity = 50;
 	spot_light->max_distance = 300;
 	scene->AddEntity(spot_light);
+
+	random_points = GTR::generateSpherePoints(100, sphere_radius, true);
 
 	//hide the cursor
 	SDL_ShowCursor(!mouse_locked); //hide or show the mouse
@@ -122,6 +134,7 @@ void Application::render(void)
 	if (current_pipeline == DEFERRED) {
 		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
 		renderer->renderGBuffers(scene, camera);
+		if (use_ssao) renderer->renderSSAO(camera);
 		renderer->renderIlluminationToBuffer(camera);
 		scene->forward_for_blends = true;
 		renderer->renderSceneForward(scene, camera);
@@ -139,6 +152,9 @@ void Application::render(void)
 
 		if (scene->show_gbuffers)
 			renderer->showGBuffers();
+
+		if (scene->show_ssao && use_ssao)
+			renderer->showSSAO();
 	}
 	else {	
 		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
@@ -175,10 +191,13 @@ void Application::renderDebugGUI(void)
 			light->intensity *= compensation_factor;
 	}
 			
-
 	ImGui::Checkbox("Gamma Correction", &use_gamma_correction);
-
 	ImGui::Checkbox("Wireframe", &render_wireframe);
+	ImGui::Separator();
+	ImGui::Checkbox("SSAO", &use_ssao);
+	ImGui::SliderInt("Kernel Size", &kernel_size, 1, 15);
+	if (kernel_size % 2 == 0) kernel_size++;
+	ImGui::SliderFloat("Radius of the spheres", &sphere_radius, 0.0f, 20.0f);
 
 	//add info to the debug panel about the camera
 	if (ImGui::TreeNode(camera, "Camera")) {

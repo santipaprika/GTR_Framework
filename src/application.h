@@ -56,8 +56,6 @@ public:
 
 	Application( int window_width, int window_height, SDL_Window* window );
 
-	void createScene(Vector3 offset);
-
 	//main functions
 	void render( void );
 	void update( double dt );

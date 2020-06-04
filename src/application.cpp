@@ -58,7 +58,7 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 
 	// Create camera
 	camera = new Camera();
-	camera->lookAt(Vector3(-150.f, 150.0f, 250.f) + offset, Vector3(0.f, 0.0f, 0.f) + offset, Vector3(0.f, 1.f, 0.f));
+	camera->lookAt(Vector3(-150.f, 150.0f, 250.f), Vector3(0.f, 0.0f, 0.f), Vector3(0.f, 1.f, 0.f));
 	camera->setPerspective( 45.f, window_width/(float)window_height, 1.0f, 10000.f);
 
 	//initialize GBuffers for deferred (create FBO)
@@ -84,93 +84,34 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	//This class will be the one in charge of rendering all 
 	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor
 
-	createScene(offset);
+	GTR::Scene* scene = new GTR::Scene();
+	GTR::Prefab* scene_prefab = GTR::Prefab::Get("data/prefabs/brutalism/scene.gltf");
+	scene_prefab->root.model.rotate(PI/2.0, Vector3(0,1,0));
+	scene_prefab->root.model.translateGlobal(0, 0, -200);
+	scene_prefab->root.model.scale(100, 100, 100);
+	scene->AddEntity(new GTR::PrefabEntity(scene_prefab));
+
+	Mesh* plane_mesh = new Mesh();
+	plane_mesh->createPlane(2048.0f);
+	GTR::Node plane_node = GTR::Node();
+	plane_node.mesh = plane_mesh;
+	GTR::Material* plane_mat = new GTR::Material(Texture::Get("data/textures/grass.png"));
+	plane_mat->tiles_number = 50;
+	plane_node.material = plane_mat;
+	GTR::Prefab* floor = new GTR::Prefab();
+	floor->root = plane_node;
+	floor->name = "Floor_Node";
+	scene->AddEntity(new GTR::PrefabEntity(floor, Vector3(0,0,0), Vector3(0,0,0), "Floor"));
+
+	GTR::Light* spot_light = new GTR::Light(Color::WHITE, Vector3(0, 500, 0), Vector3(0, -0.8, 0.2), "Spot Light", GTR::SPOT);
+	spot_light->intensity = 50;
+	spot_light->max_distance = 300;
+	scene->AddEntity(spot_light);
 
 	//hide the cursor
 	SDL_ShowCursor(!mouse_locked); //hide or show the mouse
 }
 
-void Application::createScene(Vector3 offset)
-{
-	//initialize scene
-	GTR::Scene* scene = new GTR::Scene();
-
-	//Load lights (the constructor adds them automatically to the scene)
-	GTR::Light* light1 = new GTR::Light(Color::RED, Vector3(-1280, 380, 510) + offset, Vector3(0, 0, 1), "Point", GTR::POINT);
-	light1->max_distance = 1500;
-	light1->intensity = 20;
-	light1->updateLightCamera();
-
-	GTR::Light* light2 = new GTR::Light(Color::GREEN, Vector3(120, 830, -120) + offset, Vector3(0.4, -0.85, 0.34), "Spot house", GTR::SPOT);
-	light2->setCutoffAngle(65.0);
-	light2->intensity = 20;
-	light2->max_distance = 1300;
-
-
-	GTR::Light* light3 = new GTR::Light(Color::YELLOW, Vector3(0, 0, 0) + offset, Vector3(0, -0.9, -0.2), "Sun", GTR::DIRECTIONAL);
-	light3->max_distance = 1500;
-	light3->ortho_cam_size = 2000;
-	light3->intensity = 4;
-	light3->updateLightCamera();
-
-	GTR::Light* light4 = new GTR::Light(Color::TURQUESE, Vector3(1520, 330, -175) + offset, Vector3(-0.23, -0.5, 0.8), "Spot cars", GTR::SPOT);
-	light4->setCutoffAngle(22.0);
-	light4->intensity = 20;
-	light4->max_distance = 1700;
-
-	//Add lights into scene
-	scene->AddEntity(light3);
-	scene->AddEntity(light1);
-	scene->AddEntity(light2);
-	scene->AddEntity(light4);
-
-	//Create plane
-	GTR::Node plane_node = GTR::Node();
-	plane_node.mesh = new Mesh();
-	plane_node.mesh->createPlane(2048.0);
-	plane_node.material = new GTR::Material(Texture::Get("data/textures/asphalt.png"));
-	plane_node.material->name = "Road";
-	plane_node.material->tiles_number = 4.4;
-
-	//Create prefabs
-	GTR::Prefab* plane_prefab = new GTR::Prefab();
-	plane_prefab->name = "Floor";
-	plane_prefab->root = plane_node;
-
-	GTR::Prefab* car = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
-	//GTR::Prefab* lowres_car = GTR::Prefab::Get("data/prefabs/gmc_lowres/lowres_scene.gltf");
-	GTR::Prefab* lamp = GTR::Prefab::Get("data/prefabs/lamp/scene.gltf");
-	lamp->root.model.scale(50, 50, 50);
-	GTR::Prefab* house = GTR::Prefab::Get("data/prefabs/house/scene.gltf");
-	house->root.model.scale(0.35, 0.35, 0.35);
-
-
-	//Add to prefabs list
-	//scene->AddEntity(new GTR::PrefabEntity(sphere_prefab, light1->model.getTranslation()));
-	scene->AddEntity(new GTR::PrefabEntity(plane_prefab, offset));
-	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(0, 0, 0) + offset, Vector3(0, 0, 0), "Car 1"));
-	scene->AddEntity(new GTR::PrefabEntity(car, Vector3(200, 0, 60) + offset, Vector3(0, 40, 0), "Car 2"));
-	scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(150, 0, 200) + offset, Vector3(0, 90, 0)));
-	scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(0, 0, 200) + offset, Vector3(0, 0, 0)));
-	scene->AddEntity(new GTR::PrefabEntity(house, Vector3(250, 0, 100) + offset));
-
-	for (int i = 0; i < 5; i++) {
-		for (int j = 0; j < 5; j++) {
-			scene->AddEntity(new GTR::PrefabEntity(car, Vector3(1000 + i * 150, 0, j * 300) + offset, Vector3(0, 0, 0), "Car Parking"));
-			scene->AddEntity(new GTR::PrefabEntity(lamp, Vector3(-1000 - i * 200 + random(50, -25), 0, j * 200 + random(50, -25)) + offset, Vector3(0, 60 * (i + j), 0)));
-		}
-	}
-
-	int num_per_side = 5;
-	float plane_size = 2048.0;
-	for (int i = 0; i < num_per_side; i++) {
-		for (int j = 0; j < num_per_side; j++) {
-			GTR::Light* light = new GTR::Light(Color::PINK, Vector3((i+0.5) * plane_size * 2 / num_per_side + random(25, 0) - plane_size, 100, (j+0.5) * plane_size * 2 / num_per_side + random(25, 0) - plane_size) + offset, Vector3(0,-0.9,0.2), "light", GTR::POINT, 25.0f);
-			light->cast_shadows = false;
-			scene->AddEntity(light);
-		}
-	}
-}
 
 //what to do when the image has to be draw
 void Application::render(void)

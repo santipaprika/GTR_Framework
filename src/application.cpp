@@ -89,7 +89,7 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 
 	//maybe we want to create also one for the blur, in this case just create a texture
 	ssao_blur = new Texture();
-	ssao_blur->create(window_width/1, window_height/1);
+	ssao_blur->create(ssao_fbo->width, ssao_fbo->height);
 
 	//This class will be the one in charge of rendering all 
 	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor

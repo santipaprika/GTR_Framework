@@ -76,16 +76,31 @@ void Renderer::renderSSAO(Camera* camera)
 {
 	Application* application = Application::instance;
 
+	Shader* shader = Shader::Get("ssao");
+	shader->enable();
+
 	////bind the texture we want to change
-	//application->gbuffers_fbo->depth_texture->bind();
+	application->gbuffers_fbo->bind();
 
-	////disable using mipmaps
-	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	//disable using mipmaps
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-	////enable bilinear filtering
-	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	//enable bilinear filtering
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	//application->gbuffers_fbo->depth_texture->unbind();
+	application->gbuffers_fbo->unbind();
+
+	////bind the texture we want to change
+	application->gbuffers_fbo->color_textures[1]->bind();
+
+	//disable using mipmaps
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+	//enable bilinear filtering
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+
+	application->gbuffers_fbo->color_textures[1]->unbind();
 
 	//start rendering inside the ssao texture
 	application->ssao_fbo->bind();
@@ -96,19 +111,20 @@ void Renderer::renderSSAO(Camera* camera)
 	application->ssao_fbo->enableAllBuffers();
 
 	//get the shader for SSAO (remember to create it using the atlas)
-	Shader* shader = Shader::Get("ssao");
-	shader->enable();
+	
 
 	Matrix44 inv_vp = camera->viewprojection_matrix;
 	inv_vp.inverse();
 
 	//send info to reconstruct the world position
 	shader->setUniform("u_inverse_viewprojection", inv_vp);
-	shader->setTexture("u_depth_texture", application->gbuffers_fbo->depth_texture, 0);
 	//we need the pixel size so we can center the samples 
 	shader->setUniform("u_iRes", Vector2(1.0 / (float)application->gbuffers_fbo->depth_texture->width, 1.0 / (float)application->gbuffers_fbo->depth_texture->height));
 	//we will need the viewprojection to obtain the uv in the depthtexture of any random position of our world
 	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+
+	shader->setTexture("u_depth_texture", application->gbuffers_fbo->depth_texture, 0);
+	shader->setTexture("u_normal_texture", application->gbuffers_fbo->color_textures[1], 1);
 
 	//send random points so we can fetch around
 	shader->setUniform3Array("u_points", (float*)&application->random_points[0], application->random_points.size());

@@ -1898,7 +1898,7 @@ mat3 cotangent_frame(vec3 N, vec3 p, vec2 uv)
 void main()
 {
     //we want to center the sample in the center of the pixel
-    vec2 uv = v_uv + u_iRes;
+    vec2 uv = v_uv + u_iRes * 0.5;
 
     //read depth from depth buffer
     float depth = texture( u_depth_texture, uv ).x;
@@ -1920,7 +1920,7 @@ void main()
     vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
 
     //lets use 64 samples
-    const int samples = 64;
+    const int samples = 100;
     int num = samples; //num samples that passed the are outside
 
     //for every sample around the point

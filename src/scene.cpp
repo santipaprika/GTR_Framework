@@ -1,6 +1,7 @@
 #include "scene.h"
 #include "mesh.h"
 #include "application.h"
+#include "renderer.h"
 
 using namespace GTR;
 
@@ -15,18 +16,74 @@ Scene::Scene()
 	//guardamos la instancia
 	instance = this;
 
-	ambient_light = Vector3(0.2, 0.2, 0.35);
-	bg_color = Vector4(0.5, 0.5, 0.5, 1.0);
-	ambient_power = 1.0;
+	ambient_light = Vector3(1.0, 1.0, 1.0);
+	bg_color = Vector4(1.0, 0.8, 0.7, 1.0);
+	ambient_power = 0.6;
 
 	//flags
 	reverse_shadowmap = true;
-	AA_shadows = true;
+	AA_shadows = false;
 	show_gbuffers = false;
 	use_geometry_on_deferred = true;
 	show_deferred_light_geometry = false;
 	forward_for_blends = false;
 	show_ssao = false;
+}
+
+void Scene::defineGrid()
+{
+	//define the corners of the axis aligned grid
+	//this can be done using the boundings of our scene
+	Vector3 start_pos(-55, 10, -170);
+	Vector3 end_pos(180, 150, 80);
+
+	//define how many probes you want per dimension
+	Vector3 dim(8, 6, 12);
+
+	//compute the vector from one corner to the other
+	Vector3 delta = (end_pos - start_pos);
+
+	//and scale it down according to the subdivisions
+	//we substract one to be sure the last probe is at end pos
+	delta.x /= (dim.x - 1);
+	delta.y /= (dim.y - 1);
+	delta.z /= (dim.z - 1);
+
+	//now delta give us the distance between probes in every axis
+	//lets compute the centers
+	//pay attention at the order at which we add them
+	for (int z = 0; z < dim.z; ++z)
+		for (int y = 0; y < dim.y; ++y)
+			for (int x = 0; x < dim.x; ++x)
+			{
+				sProbe p;
+				p.local.set(x, y, z);
+
+				//index in the linear array
+				p.index = x + y * dim.x + z * dim.x * dim.y;
+
+				//and its position
+				p.pos = start_pos + delta * Vector3(x, y, z);
+				probes.push_back(p);
+			}
+
+	int num = dim.x * dim.y * dim.z;
+	//now compute the coeffs for every probe
+	for (int iP = 0; iP < num; ++iP)
+	{
+		int probe_index = iP;
+		Application::instance->renderer->computeIrradianceCoefficients(probes[probe_index], Scene::instance);
+	}
+
+}
+
+void Scene::computeAllIrradianceCoefficients()
+{
+	for (int iP = 0; iP < probes.size(); ++iP)
+	{
+		int probe_index = iP;
+		Application::instance->renderer->computeIrradianceCoefficients(probes[probe_index], Scene::instance);
+	}
 }
 
 void Scene::AddEntity(BaseEntity* entity)
@@ -51,6 +108,10 @@ void Scene::renderInMenu()
 	ImGui::Text("Flags:");
 	ImGui::Checkbox("Reverse Shadowmap", &reverse_shadowmap);
 	ImGui::Checkbox("Apply AntiAliasing to Shadows", &AA_shadows);
+
+	if (ImGui::Button("Re-compute irradiance"))
+		computeAllIrradianceCoefficients();
+
 	if (Application::instance->current_pipeline == Application::DEFERRED)
 	{
 		ImGui::Checkbox("Show GBuffers", &show_gbuffers);

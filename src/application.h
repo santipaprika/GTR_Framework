@@ -9,11 +9,14 @@
 #include "camera.h"
 #include "utils.h"
 #include "BaseEntity.h"
+#include "renderer.h"
 
 class Application
 {
 public:
 	static Application* instance;
+
+	GTR::Renderer* renderer = nullptr;
 
 	//window
 	SDL_Window* window;
@@ -50,6 +53,7 @@ public:
 
 	FBO* gbuffers_fbo;
 	FBO* illumination_fbo;
+	FBO* irr_fbo;
 	
 	// SSAO
 	FBO* ssao_fbo;

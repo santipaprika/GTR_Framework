@@ -37,19 +37,19 @@ void Material::setUniforms(Shader* shader, bool is_first_pass) {
 		shader->setUniform("u_color", color);
 
 	if (!color_texture || !is_first_pass)
-		shader->setUniform("u_texture", white_tex, 1);
+		shader->setTexture("u_texture", white_tex, 1);
 	else
-		shader->setUniform("u_texture", color_texture, 1);
+		shader->setTexture("u_texture", color_texture, 1);
 
 	if (!emissive_texture || !is_first_pass)
-		shader->setUniform("u_emissive_texture", black_tex, 2);
+		shader->setTexture("u_emissive_texture", black_tex, 2);
 	else
-		shader->setUniform("u_emissive_texture", emissive_texture, 2);
+		shader->setTexture("u_emissive_texture", emissive_texture, 2);
 
 	if (!occlusion_texture || !is_first_pass)
-		shader->setUniform("u_occlusion_texture", white_tex, 3);
+		shader->setTexture("u_occlusion_texture", white_tex, 3);
 	else
-		shader->setUniform("u_occlusion_texture", occlusion_texture, 3);
+		shader->setTexture("u_occlusion_texture", occlusion_texture, 3);
 
 	shader->setUniform("u_color", Vector4(gamma(color.xyz()), color.w));
 	shader->setUniform("u_tiles_number", tiles_number);

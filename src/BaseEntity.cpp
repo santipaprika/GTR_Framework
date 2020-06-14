@@ -145,7 +145,7 @@ void Light::setShadowUniforms(Shader* shader)
 	if (!shadow_fbo) return;
 
 	shader->setTexture("u_shadowmap_AA", shadow_fbo->depth_texture, 7);
-	shader->setUniform("u_shadowmap", shadow_fbo->depth_texture, 8);
+	shader->setTexture("u_shadowmap", shadow_fbo->depth_texture, 8);
 	shader->setUniform("u_shadow_viewproj", camera->viewprojection_matrix);
 	shader->setUniform("u_shadow_bias", (float)shadow_bias);
 	if (light_type == GTR::POINT)

@@ -9,6 +9,8 @@
 
 namespace GTR {
 
+	struct sProbe;
+
 	//this class contains all info relevant of how to create and define the scene
 	class Scene {
 	public:
@@ -19,6 +21,9 @@ namespace GTR {
 		//list to store al entities of the scene
 		std::vector<Light*> lights;
 		std::vector<PrefabEntity*> prefabs;
+
+		//a place to store the probes
+		std::vector<sProbe> probes;
 
 		//Values that defnes the scene
 		Vector3 ambient_light;
@@ -37,6 +42,8 @@ namespace GTR {
 		//ctor
 		Scene();
 
+		void defineGrid();
+		void computeAllIrradianceCoefficients();
 		void AddEntity(BaseEntity* entity);
 		void renderInMenu();
 

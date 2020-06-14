@@ -2,6 +2,7 @@
 #include "prefab.h"
 #include "BaseEntity.h"
 #include "scene.h"
+#include "sphericalharmonics.h"
 
 //forward declarations
 class Camera;
@@ -10,6 +11,15 @@ namespace GTR {
 	class Prefab;
 	class Material;
 	
+	//struct to store probes
+	struct sProbe {
+		Vector3 pos; //where is located
+		Vector3 local; //its ijk pos in the matrix
+		int index; //its index in the linear array
+		SphericalHarmonics sh; //coeffs
+	};
+
+
 	// This class is in charge of rendering anything in our system.
 	// Separating the render from anything else makes the code cleaner
 	class Renderer
@@ -68,6 +78,10 @@ namespace GTR {
 
 		void setDefaultGLFlags();
 
+		// PROBES
+		void computeIrradianceCoefficients(sProbe &probe, Scene* scene);
+
+		void renderProbe(Vector3 pos, float size, float* coeffs);
 	};
 
 };

@@ -26,7 +26,7 @@ void Renderer::renderGBuffers(Scene* scene, Camera* camera)
 	gbuffers_fbo->enableSingleBuffer(0);
 
 	//clear GB0 with the color (and depth)
-	glClearColor(0.1, 0.1, 0.1, 1.0);
+	glClearColor(scene->bg_color.x, scene->bg_color.y, scene->bg_color.z, scene->bg_color.w);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	//and now enable the second GB to clear it to black
@@ -179,10 +179,10 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 	sh->enable();
 
 	//pass the gbuffers to the shader
-	sh->setUniform("u_color_texture", gbuffers_fbo->color_textures[0], 0);
-	sh->setUniform("u_normal_texture", gbuffers_fbo->color_textures[1], 1);
-	sh->setUniform("u_emissive_texture", gbuffers_fbo->color_textures[2], 2);
-	sh->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 3);
+	sh->setTexture("u_color_texture", gbuffers_fbo->color_textures[0], 0);
+	sh->setTexture("u_normal_texture", gbuffers_fbo->color_textures[1], 1);
+	sh->setTexture("u_emissive_texture", gbuffers_fbo->color_textures[2], 2);
+	sh->setTexture("u_depth_texture", gbuffers_fbo->depth_texture, 3);
 
 	Matrix44 inv_vp = camera->viewprojection_matrix;
 	inv_vp.inverse();
@@ -200,7 +200,7 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 
 	sh->setUniform("u_use_ssao", Application::instance->use_ssao);
 	if (Application::instance->use_ssao)
-		sh->setUniform("u_ssao_texture", Application::instance->ssao_blur, 4);
+		sh->setTexture("u_ssao_texture", Application::instance->ssao_blur, 5);
 
 	glDisable(GL_BLEND);
 	glDisable(GL_DEPTH_TEST);
@@ -225,10 +225,10 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 			shader = chooseShader(light);	//this sets light uniforms too
 
 		//pass the gbuffers to the shader
-		shader->setUniform("u_color_texture", gbuffers_fbo->color_textures[0], 0);
-		shader->setUniform("u_normal_texture", gbuffers_fbo->color_textures[1], 1);
-		shader->setUniform("u_extra_texture", gbuffers_fbo->color_textures[2], 2);
-		shader->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 3);
+		shader->setTexture("u_color_texture", gbuffers_fbo->color_textures[0], 0);
+		shader->setTexture("u_normal_texture", gbuffers_fbo->color_textures[1], 1);
+		shader->setTexture("u_extra_texture", gbuffers_fbo->color_textures[2], 2);
+		shader->setTexture("u_depth_texture", gbuffers_fbo->depth_texture, 3);
 
 		Matrix44 inv_vp_mp = camera->viewprojection_matrix;
 		inv_vp_mp.inverse();
@@ -620,7 +620,7 @@ void Renderer::renderMultiPass(const Matrix44 model, Mesh* mesh, GTR::Material* 
 			material->setUniforms(shader, true);
 
 			FBO* gbuffers = Application::instance->gbuffers_fbo;
-			shader->setUniform("u_depth_texture", gbuffers->depth_texture, 9);
+			shader->setTexture("u_depth_texture", gbuffers->depth_texture, 9);
 
 			Matrix44 inv_vp = camera->viewprojection_matrix;
 			inv_vp.inverse();
@@ -785,5 +785,72 @@ void Renderer::setDefaultGLFlags()
 	glEnable(GL_CULL_FACE);
 	glFrontFace(GL_CCW); //instead of GL_CCW
 }
+
+void Renderer::computeIrradianceCoefficients(sProbe &probe, Scene* scene)
+{
+	FloatImage images[6]; //here we will store the six views
+
+	Camera cam;
+	//set the fov to 90 and the aspect to 1
+	cam.setPerspective(160, 1, 0.1, 1000);
+
+	FBO* irr_fbo = Application::instance->irr_fbo;
+	setDefaultGLFlags();
+
+	for (int i = 0; i < 6; ++i) //for every cubemap face
+	{
+		//compute camera orientation using defined vectors
+		Vector3 eye = probe.pos;
+		Vector3 front = cubemapFaceNormals[i][2];
+		Vector3 center = probe.pos + front;
+		Vector3 up = cubemapFaceNormals[i][1];
+		cam.lookAt(eye, center, up);
+		cam.enable();
+
+		//render the scene from this point of view
+		irr_fbo->bind();
+
+		Application::instance->current_pipeline = Application::FORWARD;
+		std::vector<GTR::Light*> shadow_caster_lights = renderSceneShadowmaps(scene);
+		renderSceneForward(scene, &cam);
+		Application::instance->current_pipeline = Application::DEFERRED;
+
+		irr_fbo->unbind();
+
+		//read the pixels back and store in a FloatImage
+		images[i].fromTexture(irr_fbo->color_textures[0]);
+	}
+	
+	Application::instance->camera->enable();
+
+	//compute the coefficients given the six images
+	probe.sh = computeSH(images);
+
+}
+
+void Renderer::renderProbe(Vector3 pos, float size, float* coeffs)
+{
+	Camera* camera = Camera::current;
+	Shader* shader = Shader::Get("probe");
+	Mesh* mesh = Mesh::Get("data/meshes/sphere.obj");
+
+	glEnable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	
+
+	Matrix44 model;
+	model.setTranslation(pos.x, pos.y, pos.z);
+	model.scale(size, size, size);
+
+	shader->enable();
+	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+	shader->setUniform("u_camera_position", camera->eye);
+	shader->setUniform("u_model", model);
+	shader->setUniform3Array("u_coeffs", coeffs, 9);
+
+	mesh->render(GL_TRIANGLES);
+}
+
 
 

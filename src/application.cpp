@@ -163,6 +163,8 @@ void Application::render(void)
 			renderer->renderProbe(probe.pos, 5, (float*)&probe.sh);
 		}
 
+		glDisable(GL_DEPTH_TEST);
+
 		renderer->showSceneShadowmaps(shadow_caster_lights);
 
 		if (scene->show_gbuffers)
@@ -174,7 +176,7 @@ void Application::render(void)
 		for (int i = 0; i < 1; i++)
 		{
 			glViewport(200*i, 0, 200, 200);
-			irr_fbo->color_textures[i]->toViewport();
+			irr_fbo->color_textures[0]->toViewport();
 
 		}
 	}

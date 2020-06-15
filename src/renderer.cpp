@@ -792,7 +792,7 @@ void Renderer::computeIrradianceCoefficients(sProbe &probe, Scene* scene)
 
 	Camera cam;
 	//set the fov to 90 and the aspect to 1
-	cam.setPerspective(160, 1, 0.1, 1000);
+	cam.setPerspective(90, 1, 0.1, 1000);
 
 	FBO* irr_fbo = Application::instance->irr_fbo;
 	setDefaultGLFlags();
@@ -808,11 +808,16 @@ void Renderer::computeIrradianceCoefficients(sProbe &probe, Scene* scene)
 		cam.enable();
 
 		//render the scene from this point of view
-		irr_fbo->bind();
 
 		Application::instance->current_pipeline = Application::FORWARD;
 		std::vector<GTR::Light*> shadow_caster_lights = renderSceneShadowmaps(scene);
+		//Application::instance->rendering_shadowmap = true;
+		irr_fbo->bind();
+		//Vector4 bg_color = scene->bg_color;
+		//glClearColor(bg_color.x, bg_color.y, bg_color.z, bg_color.w);
+		//setDefaultGLFlags();
 		renderSceneForward(scene, &cam);
+		//Application::instance->rendering_shadowmap = false;
 		Application::instance->current_pipeline = Application::DEFERRED;
 
 		irr_fbo->unbind();
@@ -836,7 +841,7 @@ void Renderer::renderProbe(Vector3 pos, float size, float* coeffs)
 
 	glEnable(GL_CULL_FACE);
 	glDisable(GL_BLEND);
-	glDisable(GL_DEPTH_TEST);
+	glEnable(GL_DEPTH_TEST);
 	
 
 	Matrix44 model;

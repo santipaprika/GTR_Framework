@@ -17,7 +17,7 @@ Scene::Scene()
 	instance = this;
 
 	ambient_light = Vector3(1.0, 1.0, 1.0);
-	bg_color = Vector4(1.0, 0.8, 0.7, 1.0);
+	bg_color = Vector4(0.7, 0.8, 1.0, 1.0);
 	ambient_power = 0.6;
 
 	//flags
@@ -34,8 +34,8 @@ void Scene::defineGrid()
 {
 	//define the corners of the axis aligned grid
 	//this can be done using the boundings of our scene
-	Vector3 start_pos(-55, 10, -170);
-	Vector3 end_pos(180, 150, 80);
+	Vector3 start_pos(-55, 10, -240);
+	Vector3 end_pos(240, 230, 80);
 
 	//define how many probes you want per dimension
 	Vector3 dim(8, 6, 12);
@@ -109,8 +109,10 @@ void Scene::renderInMenu()
 	ImGui::Checkbox("Reverse Shadowmap", &reverse_shadowmap);
 	ImGui::Checkbox("Apply AntiAliasing to Shadows", &AA_shadows);
 
-	if (ImGui::Button("Re-compute irradiance"))
-		computeAllIrradianceCoefficients();
+	if (ImGui::Button("Re-compute irradiance")) {
+		probes.clear();
+		defineGrid();
+	}
 
 	if (Application::instance->current_pipeline == Application::DEFERRED)
 	{

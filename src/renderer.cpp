@@ -10,6 +10,7 @@
 #include "BaseEntity.h"
 #include "scene.h"
 #include "application.h"
+#include "extra/hdre.h"
 
 using namespace GTR;
 
@@ -192,7 +193,7 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 	//pass the inverse window resolution, this may be useful
 	sh->setUniform("u_iRes", Vector2(1.0 / (float)Application::instance->window_width, 1.0 / (float)Application::instance->window_height));
 
-	//pass all the information about the light and ambient…
+	//pass all the information about the light and ambientï¿½
 	if (Application::instance->use_gamma_correction)
 		sh->setUniform("u_ambient_light", gamma(scene->ambient_light) * scene->ambient_power);
 	else
@@ -867,3 +868,19 @@ void Renderer::renderProbe(Vector3 pos, float size, float* coeffs)
 
 
 
+
+Texture* GTR::CubemapFromHDRE(const char* filename)
+{
+	HDRE* hdre = new HDRE();
+	if (!hdre->load(filename))
+	{
+		delete hdre;
+		return NULL;
+	}
+
+	Texture* texture = new Texture();
+	texture->createCubemap(hdre->width, hdre->height, (Uint8**)hdre->getFaces(0), hdre->header.numChannels == 3 ? GL_RGB : GL_RGBA, GL_FLOAT );
+	for(int i = 1; i < 6; ++i)
+		texture->uploadCubemap(texture->format, texture->type, false, (Uint8**)hdre->getFaces(i), GL_RGBA32F, i);
+	return texture;
+}

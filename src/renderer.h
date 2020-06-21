@@ -84,4 +84,6 @@ namespace GTR {
 		void renderProbe(Vector3 pos, float size, float* coeffs);
 	};
 
+	Texture* CubemapFromHDRE(const char* filename);
+
 };

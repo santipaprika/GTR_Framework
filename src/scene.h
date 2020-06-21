@@ -38,11 +38,12 @@ namespace GTR {
 		bool show_deferred_light_geometry;
 		bool forward_for_blends;
 		bool show_ssao;
+		bool show_probes;
 
 		//ctor
 		Scene();
 
-		void defineGrid();
+		void defineGrid(Vector3 offset);
 		void computeAllIrradianceCoefficients();
 		void AddEntity(BaseEntity* entity);
 		void renderInMenu();

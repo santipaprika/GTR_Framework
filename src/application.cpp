@@ -60,7 +60,7 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 
 	// Create camera
 	camera = new Camera();
-	camera->lookAt(Vector3(-150.f, 150.0f, 250.f), Vector3(0.f, 0.1f, 0.f), Vector3(0.f, 1.f, 0.f));
+	camera->lookAt(Vector3(-150.f, 150.0f, 250.f) + offset, Vector3(0.f, 0.1f, 0.f) + offset, Vector3(0.f, 1.f, 0.f));
 	camera->setPerspective( 45.f, window_width/(float)window_height, 1.0f, 10000.f);
 
 	//initialize GBuffers for deferred (create FBO)
@@ -98,11 +98,13 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor
 
 	GTR::Scene* scene = new GTR::Scene();
+	GTR::Prefab* car_prefab = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
 	GTR::Prefab* scene_prefab = GTR::Prefab::Get("data/prefabs/brutalism/scene.gltf");
 	scene_prefab->root.model.rotate(PI/2.0, Vector3(0,1,0));
 	scene_prefab->root.model.translateGlobal(0, 0, -200);
 	scene_prefab->root.model.scale(100, 100, 100);
-	scene->AddEntity(new GTR::PrefabEntity(scene_prefab));
+	scene->AddEntity(new GTR::PrefabEntity(car_prefab, Vector3(450, 0, 0) + offset, Vector3(0,0,0),"Car"));
+	scene->AddEntity(new GTR::PrefabEntity(scene_prefab, offset));
 
 	Mesh* plane_mesh = new Mesh();
 	plane_mesh->createPlane(2048.0f);
@@ -119,16 +121,16 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	GTR::Prefab* floor = new GTR::Prefab();
 	floor->root = plane_node;
 	floor->name = "Floor_Node";
-	scene->AddEntity(new GTR::PrefabEntity(floor, Vector3(0,-27,0), Vector3(0,0,0), "Floor"));
+	scene->AddEntity(new GTR::PrefabEntity(floor, Vector3(0,-27,0) + offset, Vector3(0,0,0), "Floor"));
 
-	GTR::Light* sun = new GTR::Light(Color::WHITE, Vector3(0, 0, 0), Vector3(0, -0.5, 0.2), "Sun", GTR::DIRECTIONAL);
+	GTR::Light* sun = new GTR::Light(Color::WHITE, Vector3(0, 0, 0) + offset, Vector3(0, -0.5, 0.2), "Sun", GTR::DIRECTIONAL);
 	sun->intensity = 20;
 	//spot_light->max_distance = 300;
 	scene->AddEntity(sun);
 
 	random_points = GTR::generateSpherePoints(100, sphere_radius, true);
 
-	scene->defineGrid();
+	scene->defineGrid(offset);
 
 	//hide the cursor
 	SDL_ShowCursor(!mouse_locked); //hide or show the mouse
@@ -158,10 +160,9 @@ void Application::render(void)
 		else
 			illumination_fbo->color_textures[0]->toViewport();
 
-		for (auto probe : scene->probes)
-		{
-			renderer->renderProbe(probe.pos, 5, (float*)&probe.sh);
-		}
+		if (scene->show_probes)
+			for (auto probe : scene->probes)
+				renderer->renderProbe(probe.pos, 5, (float*)&probe.sh);
 
 		glDisable(GL_DEPTH_TEST);
 
@@ -173,12 +174,12 @@ void Application::render(void)
 		if (scene->show_ssao && use_ssao)
 			renderer->showSSAO();
 
-		for (int i = 0; i < 1; i++)
+		/*for (int i = 0; i < 1; i++)
 		{
 			glViewport(200*i, 0, 200, 200);
 			irr_fbo->color_textures[0]->toViewport();
 
-		}
+		}*/
 	}
 	else {	
 		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);

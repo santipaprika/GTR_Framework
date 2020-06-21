@@ -835,7 +835,7 @@ void Renderer::computeIrradianceCoefficients(sProbe &probe, Scene* scene)
 
 void Renderer::renderProbe(Vector3 pos, float size, float* coeffs)
 {
-	Camera* camera = Camera::current;
+	Camera* camera = Application::instance->camera;
 	Shader* shader = Shader::Get("probe");
 	Mesh* mesh = Mesh::Get("data/meshes/sphere.obj");
 
@@ -848,10 +848,18 @@ void Renderer::renderProbe(Vector3 pos, float size, float* coeffs)
 	model.setTranslation(pos.x, pos.y, pos.z);
 	model.scale(size, size, size);
 
+	Application* application = Application::instance;
 	shader->enable();
 	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
 	shader->setUniform("u_camera_position", camera->eye);
 	shader->setUniform("u_model", model);
+	shader->setTexture("u_depth_texture", application->gbuffers_fbo->depth_texture, 0);
+	Matrix44 inv_vp = camera->viewprojection_matrix;
+	inv_vp.inverse();
+	shader->setUniform("u_inverse_viewprojection", inv_vp);
+	//we need the pixel size so we can center the samples 
+	shader->setUniform("u_iRes", Vector2(1.0 / (float)application->gbuffers_fbo->depth_texture->width, 1.0 / (float)application->gbuffers_fbo->depth_texture->height));
+
 	shader->setUniform3Array("u_coeffs", coeffs, 9);
 
 	mesh->render(GL_TRIANGLES);

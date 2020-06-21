@@ -28,17 +28,21 @@ Scene::Scene()
 	show_deferred_light_geometry = false;
 	forward_for_blends = false;
 	show_ssao = false;
+	show_probes = false;
 }
 
-void Scene::defineGrid()
+void Scene::defineGrid(Vector3 offset)
 {
 	//define the corners of the axis aligned grid
 	//this can be done using the boundings of our scene
 	Vector3 start_pos(-55, 10, -240);
 	Vector3 end_pos(240, 230, 80);
 
+	start_pos += offset;
+	end_pos += offset;
+
 	//define how many probes you want per dimension
-	Vector3 dim(8, 6, 12);
+	Vector3 dim(4, 6, 6);
 
 	//compute the vector from one corner to the other
 	Vector3 delta = (end_pos - start_pos);
@@ -108,10 +112,9 @@ void Scene::renderInMenu()
 	ImGui::Text("Flags:");
 	ImGui::Checkbox("Reverse Shadowmap", &reverse_shadowmap);
 	ImGui::Checkbox("Apply AntiAliasing to Shadows", &AA_shadows);
-
+	ImGui::Checkbox("Show probes", &show_probes);
 	if (ImGui::Button("Re-compute irradiance")) {
-		probes.clear();
-		defineGrid();
+		computeAllIrradianceCoefficients();
 	}
 
 	if (Application::instance->current_pipeline == Application::DEFERRED)

@@ -21,7 +21,7 @@ Scene::Scene()
 	ambient_power = 0.2;
 
 	//flags
-	reverse_shadowmap = true;
+	reverse_shadowmap = false;
 	AA_shadows = false;
 	show_gbuffers = false;
 	use_geometry_on_deferred = true;
@@ -34,6 +34,8 @@ Scene::Scene()
 	interpolate_probes = true;
 
 	irr_normal_distance = 1.0f;
+
+	probes_filename = "irradiance.bin";
 }
 
 void Scene::defineGrid(Vector3 offset, bool recomputing)
@@ -144,17 +146,19 @@ void Scene::writeProbesToDisk()
 		dim_grid.z;
 
 	//write to file header and probes data
-	FILE* f = fopen("irradiance.bin", "wb");
+	FILE* f = fopen(probes_filename.c_str(), "wb");
 	fwrite(&header, sizeof(header), 1, f);
 	fwrite(&(probes[0]), sizeof(sProbe), probes.size(), f);
 	fclose(f);
+
+	std::cout << "* Probes coefficients written in " + probes_filename + "\n";
 
 }
 
 bool Scene::loadProbesFromDisk()
 {
 	//load probes info from disk
-	FILE* f = fopen("irradiance.bin", "rb");
+	FILE* f = fopen(probes_filename.c_str(), "rb");
 	if (!f)
 		return false;
 

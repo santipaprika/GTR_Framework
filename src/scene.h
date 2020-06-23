@@ -51,6 +51,8 @@ namespace GTR {
 
 		Texture* probes_texture;
 
+		std::string probes_filename;
+
 		// strict for writing probes to disk
 		struct sIrrHeader {
 			Vector3 start;

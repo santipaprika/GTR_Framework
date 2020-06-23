@@ -401,7 +401,7 @@ std::vector<Light*> Renderer::renderSceneShadowmaps(GTR::Scene* scene)
 	std::vector<Light*> shadow_casting_lights;
 
 	setDefaultGLFlags();
-	if (scene->instance->reverse_shadowmap == true)
+	if (scene->instance->reverse_shadowmap)
 		glFrontFace(GL_CW); //instead of GL_CCW
 
 	//find lights that cast shadow (forced to spot atm)

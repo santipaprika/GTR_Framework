@@ -151,7 +151,6 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 void Application::render(void)
 {
 	GTR::Scene* scene = GTR::Scene::instance;
-	scene->forward_for_blends = false;
 	
 	if (current_pipeline == DEFERRED) {
 		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
@@ -160,6 +159,7 @@ void Application::render(void)
 		renderer->renderIlluminationToBuffer(camera);
 		scene->forward_for_blends = true;
 		renderer->renderSceneForward(scene, camera);
+		scene->forward_for_blends = false;
 
 		illumination_fbo->unbind();
 		renderer->setDefaultGLFlags();

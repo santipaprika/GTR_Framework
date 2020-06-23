@@ -39,12 +39,36 @@ namespace GTR {
 		bool forward_for_blends;
 		bool show_ssao;
 		bool show_probes;
+		bool use_irradiance;
+		bool show_coefficients;
+		bool interpolate_probes;
+
+		Vector3 dim_grid;
+		Vector3 start_pos_grid;
+		Vector3 end_pos_grid;
+		Vector3 delta_grid;
+		float irr_normal_distance;
+
+		Texture* probes_texture;
+
+		// strict for writing probes to disk
+		struct sIrrHeader {
+			Vector3 start;
+			Vector3 end;
+			Vector3 delta;
+			Vector3 dims;
+			int num_probes;
+		};
 
 		//ctor
 		Scene();
 
-		void defineGrid(Vector3 offset);
+		void defineGrid(Vector3 offset, bool recomputing = false);
 		void computeAllIrradianceCoefficients();
+		void setIrradianceTexture();
+		void SetIrradianceUniforms(Shader* shader);
+		void writeProbesToDisk();
+		bool loadProbesFromDisk();
 		void AddEntity(BaseEntity* entity);
 		void renderInMenu();
 

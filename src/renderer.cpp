@@ -815,13 +815,8 @@ void Renderer::computeIrradianceCoefficients(sProbe &probe, Scene* scene)
 
 		Application::instance->current_pipeline = Application::FORWARD;
 		std::vector<GTR::Light*> shadow_caster_lights = renderSceneShadowmaps(scene);
-		//Application::instance->rendering_shadowmap = true;
 		irr_fbo->bind();
-		//Vector4 bg_color = scene->bg_color;
-		//glClearColor(bg_color.x, bg_color.y, bg_color.z, bg_color.w);
-		//setDefaultGLFlags();
 		renderSceneForward(scene, &cam);
-		//Application::instance->rendering_shadowmap = false;
 		Application::instance->current_pipeline = Application::DEFERRED;
 
 		irr_fbo->unbind();

@@ -10,6 +10,7 @@
 namespace GTR {
 
 	struct sProbe;
+	struct sReflectionProbe;
 
 	//this class contains all info relevant of how to create and define the scene
 	class Scene {
@@ -24,6 +25,7 @@ namespace GTR {
 
 		//a place to store the probes
 		std::vector<sProbe> probes;
+		std::vector<sReflectionProbe*> reflection_probes;
 
 		//Values that defnes the scene
 		Vector3 ambient_light;
@@ -65,12 +67,19 @@ namespace GTR {
 		//ctor
 		Scene();
 
-		void defineGrid(Vector3 offset, bool recomputing = false);
+		// Irradiance
+		void defineIrradianceGrid(Vector3 offset);
+		void computeIrradiance();
 		void computeAllIrradianceCoefficients();
 		void setIrradianceTexture();
 		void SetIrradianceUniforms(Shader* shader);
 		void writeProbesToDisk();
 		bool loadProbesFromDisk();
+
+		// Reflection
+		void defineReflectionGrid(Vector3 offset);
+		void computeReflection();
+
 		void AddEntity(BaseEntity* entity);
 		void renderInMenu();
 

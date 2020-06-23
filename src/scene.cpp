@@ -38,12 +38,11 @@ Scene::Scene()
 	probes_filename = "irradiance.bin";
 }
 
-void Scene::defineGrid(Vector3 offset, bool recomputing)
+void Scene::defineIrradianceGrid(Vector3 offset)
 {
 
-	if (!recomputing)
-		if (loadProbesFromDisk())
-			return;
+	if (loadProbesFromDisk())
+		return;
 
 	probes.clear();
 
@@ -81,13 +80,13 @@ void Scene::defineGrid(Vector3 offset, bool recomputing)
 				p.pos = start_pos_grid + delta_grid * Vector3(x, y, z);
 				probes.push_back(p);
 			}
+}
 
+void Scene::computeIrradiance() 
+{
 	computeAllIrradianceCoefficients();
-
 	setIrradianceTexture();
-
-	if (!recomputing)
-		writeProbesToDisk();
+	writeProbesToDisk();
 }
 
 void Scene::computeAllIrradianceCoefficients()
@@ -199,6 +198,58 @@ void Scene::SetIrradianceUniforms(Shader* shader)
 	shader->setTexture("u_probes_texture", probes_texture, 9);
 }
 
+void Scene::defineReflectionGrid(Vector3 offset)
+{
+	sReflectionProbe* rProbe = new sReflectionProbe();
+	//set it up
+	rProbe->pos.set(90, 56, -72);
+	rProbe->pos += offset;
+	rProbe->cubemap = new Texture();
+	rProbe->cubemap->createCubemap(
+		512, 512,
+		NULL,
+		GL_RGB, GL_UNSIGNED_INT, false);
+
+	//add it to the list
+	reflection_probes.push_back(rProbe);
+}
+
+void Scene::computeReflection()
+{
+	Camera cam;
+	for (sReflectionProbe* rProbe : reflection_probes)
+	{
+
+		//render the view from every side
+		for (int i = 0; i < 6; ++i)
+		{
+			Application* application = Application::instance;
+			//assign cubemap face to FBO
+			application->reflections_fbo->setTexture(rProbe->cubemap, i);
+
+			//bind FBO
+			application->reflections_fbo->bind();
+
+			//render view
+			Vector3 eye = rProbe->pos;
+			Vector3 center = rProbe->pos + cubemapFaceNormals[i][2];
+			Vector3 up = cubemapFaceNormals[i][1];
+			cam.lookAt(eye, center, up);
+			cam.enable();
+			application->current_pipeline = Application::FORWARD;
+			std::vector<GTR::Light*> shadow_caster_lights = application->renderer->renderSceneShadowmaps(Scene::instance);
+			application->reflections_fbo->bind();
+			application->renderer->renderSceneForward(Scene::instance, &cam);
+			application->current_pipeline = Application::DEFERRED;
+			application->reflections_fbo->unbind();
+		}
+
+		//generate the mipmaps
+		rProbe->cubemap->generateMipmaps();
+
+	}
+}
+
 void Scene::AddEntity(BaseEntity* entity)
 {
 	switch (entity->type)
@@ -226,7 +277,7 @@ void Scene::renderInMenu()
 	ImGui::Checkbox("Show coefficients", &show_coefficients);
 	ImGui::Checkbox("Interpolate probes", &interpolate_probes);
 	if (ImGui::Button("Re-compute irradiance")) {
-		defineGrid(Vector3(0, -1000, 0), true);
+		computeIrradiance();
 	}
 	ImGui::DragFloat("Irr normal distance", &irr_normal_distance, .1f);
 

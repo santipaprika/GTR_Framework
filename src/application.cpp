@@ -86,6 +86,9 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	irr_fbo = new FBO();
 	irr_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT);
 
+	reflections_fbo = new FBO();
+	reflections_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT);
+
 	//let's create an FBO to render the AO inside
 	ssao_fbo = new FBO();
 	ssao_fbo->create(window_width/1, window_height/1);
@@ -139,8 +142,13 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 
 	random_points = GTR::generateSpherePoints(100, sphere_radius, true);
 
-	if (current_pipeline == DEFERRED)
-		scene->defineGrid(offset);
+	if (current_pipeline == DEFERRED) {
+		scene->defineIrradianceGrid(offset);
+		scene->computeIrradiance();
+
+		scene->defineReflectionGrid(offset);
+		//scene->computeReflection();
+	}
 
 	//hide the cursor
 	SDL_ShowCursor(!mouse_locked); //hide or show the mouse

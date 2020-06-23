@@ -54,6 +54,7 @@ public:
 	FBO* gbuffers_fbo;
 	FBO* illumination_fbo;
 	FBO* irr_fbo;
+	FBO* reflections_fbo;
 	
 	// SSAO
 	FBO* ssao_fbo;

@@ -19,6 +19,12 @@ namespace GTR {
 		SphericalHarmonics sh; //coeffs
 	};
 
+	//struct to store reflection probes info
+	struct sReflectionProbe {
+		Vector3 pos;
+		Texture* cubemap = NULL;
+	};
+
 
 	// This class is in charge of rendering anything in our system.
 	// Separating the render from anything else makes the code cleaner

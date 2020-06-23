@@ -203,6 +203,10 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 	if (Application::instance->use_ssao)
 		sh->setTexture("u_ssao_texture", Application::instance->ssao_blur, 5);
 
+	// irradiance uniforms
+	scene->SetIrradianceUniforms(sh);
+
+
 	glDisable(GL_BLEND);
 	glDisable(GL_DEPTH_TEST);
 
@@ -398,7 +402,7 @@ std::vector<Light*> Renderer::renderSceneShadowmaps(GTR::Scene* scene)
 	std::vector<Light*> shadow_casting_lights;
 
 	setDefaultGLFlags();
-	if (scene->instance->reverse_shadowmap == true)
+	if (scene->instance->reverse_shadowmap)
 		glFrontFace(GL_CW); //instead of GL_CCW
 
 	//find lights that cast shadow (forced to spot atm)
@@ -481,8 +485,8 @@ void Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 
 	for (auto light : scene->lights)
 	{
-		if (light->visible && light->light_type != DIRECTIONAL)
-			renderSimple(light->light_node->model, light->light_node->mesh, light->light_node->material, camera);
+		//if (light->visible && light->light_type != DIRECTIONAL)
+			//renderSimple(light->light_node->model, light->light_node->mesh, light->light_node->material, camera);
 	}
 }
 
@@ -796,7 +800,6 @@ void Renderer::computeIrradianceCoefficients(sProbe &probe, Scene* scene)
 	cam.setPerspective(90, 1, 0.1, 1000);
 
 	FBO* irr_fbo = Application::instance->irr_fbo;
-	setDefaultGLFlags();
 
 	for (int i = 0; i < 6; ++i) //for every cubemap face
 	{

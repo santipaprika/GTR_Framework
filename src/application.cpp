@@ -103,7 +103,6 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	scene_prefab->root.model.rotate(PI/2.0, Vector3(0,1,0));
 	scene_prefab->root.model.translateGlobal(0, 0, -200);
 	scene_prefab->root.model.scale(100, 100, 100);
-	scene->AddEntity(new GTR::PrefabEntity(car_prefab, Vector3(450, 0, 0) + offset, Vector3(0,0,0),"Car"));
 	scene->AddEntity(new GTR::PrefabEntity(scene_prefab, offset));
 
 	Mesh* plane_mesh = new Mesh();
@@ -122,15 +121,26 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	floor->root = plane_node;
 	floor->name = "Floor_Node";
 	scene->AddEntity(new GTR::PrefabEntity(floor, Vector3(0,-27,0) + offset, Vector3(0,0,0), "Floor"));
+	scene->AddEntity(new GTR::PrefabEntity(car_prefab, Vector3(450, -28, 0) + offset, Vector3(0,0,0),"Car"));
 
-	GTR::Light* sun = new GTR::Light(Color::WHITE, Vector3(0, 0, 0) + offset, Vector3(0, -0.5, 0.2), "Sun", GTR::DIRECTIONAL);
+	GTR::Light* sun = new GTR::Light(Color::WHITE, Vector3(0, 0, 0) + offset, Vector3(0.8, -0.45, -0.4), "Sun", GTR::DIRECTIONAL);
 	sun->intensity = 20;
-	//spot_light->max_distance = 300;
+	sun->ortho_cam_size = 1000;
+	sun->initializeLightCamera();
 	scene->AddEntity(sun);
+
+	GTR::Light* spot1 = new GTR::Light(Color::RED, Vector3(-60, 100, 0) + offset, Vector3(0.45, -0.8, -0.35), "Spot1", GTR::SPOT, 25);
+	GTR::Light* spot2 = new GTR::Light(Color::YELLOW, Vector3(0, 125, 0) + offset, Vector3(0.5, -0.15, -0.8), "Spot2", GTR::SPOT, 25);
+	spot2->spot_cutoff_in_deg = 40;
+	spot2->spot_exponent = 40;
+	spot2->initializeLightCamera();
+	scene->AddEntity(spot1);
+	scene->AddEntity(spot2);
 
 	random_points = GTR::generateSpherePoints(100, sphere_radius, true);
 
-	scene->defineGrid(offset);
+	if (current_pipeline == DEFERRED)
+		scene->defineGrid(offset);
 
 	//hide the cursor
 	SDL_ShowCursor(!mouse_locked); //hide or show the mouse
@@ -141,7 +151,6 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 void Application::render(void)
 {
 	GTR::Scene* scene = GTR::Scene::instance;
-	scene->forward_for_blends = false;
 	
 	if (current_pipeline == DEFERRED) {
 		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
@@ -150,6 +159,7 @@ void Application::render(void)
 		renderer->renderIlluminationToBuffer(camera);
 		scene->forward_for_blends = true;
 		renderer->renderSceneForward(scene, camera);
+		scene->forward_for_blends = false;
 
 		illumination_fbo->unbind();
 		renderer->setDefaultGLFlags();
@@ -174,12 +184,8 @@ void Application::render(void)
 		if (scene->show_ssao && use_ssao)
 			renderer->showSSAO();
 
-		/*for (int i = 0; i < 1; i++)
-		{
-			glViewport(200*i, 0, 200, 200);
-			irr_fbo->color_textures[0]->toViewport();
-
-		}*/
+		if (scene->show_coefficients)
+			scene->probes_texture->toViewport();
 	}
 	else {	
 		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);

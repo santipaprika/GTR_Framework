@@ -88,6 +88,9 @@ namespace GTR {
 		void computeIrradianceCoefficients(sProbe &probe, Scene* scene);
 
 		void renderProbe(Vector3 pos, float size, float* coeffs);
+
+		// SKYBOX
+		void renderSkybox(Camera* camera, Texture* environment);
 	};
 
 	Texture* CubemapFromHDRE(const char* filename);

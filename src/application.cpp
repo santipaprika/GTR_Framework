@@ -31,6 +31,7 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	must_exit = false;
 	render_debug = true;
 	render_gui = true;
+	render_grid = false;
 
 	render_wireframe = false;
 	use_gamma_correction = false;
@@ -75,13 +76,11 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 
 	//create and FBO
 	illumination_fbo = new FBO();
+	volumetrics_fbo = new FBO();
 
 	//create 3 textures of 4 components
-	illumination_fbo->create(window_width, window_height,
-		1, 			//three textures
-		GL_RGB, 		//three channels
-		GL_FLOAT, //1 byte
-		false);		//add depth_texture
+	illumination_fbo->create(window_width, window_height, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
+	volumetrics_fbo->create(window_width/1, window_height/1, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
 
 	irr_fbo = new FBO();
 	irr_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT);
@@ -100,8 +99,9 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	//This class will be the one in charge of rendering all 
 	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor
 
+	//Create Scene
 	GTR::Scene* scene = new GTR::Scene();
-	GTR::Prefab* car_prefab = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
+
 	GTR::Prefab* scene_prefab = GTR::Prefab::Get("data/prefabs/brutalism/scene.gltf");
 	scene_prefab->root.model.rotate(PI/2.0, Vector3(0,1,0));
 	scene_prefab->root.model.translateGlobal(0, 0, -200);
@@ -112,25 +112,26 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	plane_mesh->createPlane(2048.0f);
 	GTR::Node plane_node = GTR::Node();
 	plane_node.mesh = plane_mesh;
-//#ifdef _DEBUG
-	GTR::Material* plane_mat = new GTR::Material(Texture::Get("data/textures/grass.png"));
-//#else
-//	GTR::Material* plane_mat = new GTR::Material(Texture::getWhiteTexture());
-//#endif
 
+	GTR::Material* plane_mat = new GTR::Material(Texture::Get("data/textures/grass.png"));
 	plane_mat->tiles_number = 50;
 	plane_node.material = plane_mat;
 	GTR::Prefab* floor = new GTR::Prefab();
 	floor->root = plane_node;
 	floor->name = "Floor_Node";
 	scene->AddEntity(new GTR::PrefabEntity(floor, Vector3(0,-27,0) + offset, Vector3(0,0,0), "Floor"));
-	scene->AddEntity(new GTR::PrefabEntity(car_prefab, Vector3(450, -28, 0) + offset, Vector3(0,0,0),"Car"));
+
+	GTR::Prefab* car_prefab = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
+	scene->AddEntity(new GTR::PrefabEntity(car_prefab, Vector3(450, -28, 0) + offset, Vector3(0,0,0),"Car")); //last prefab is the car, due to the blend materials
 
 	GTR::Light* sun = new GTR::Light(Color::WHITE, Vector3(0, 0, 0) + offset, Vector3(0.8, -0.45, -0.4), "Sun", GTR::DIRECTIONAL);
 	sun->intensity = 20;
 	sun->ortho_cam_size = 1000;
 	sun->initializeLightCamera();
 	scene->AddEntity(sun);
+
+	//pick the texture used for the skybox
+	scene->environment = GTR::CubemapFromHDRE("data/textures/panorama.hdre");
 
 	GTR::Light* spot1 = new GTR::Light(Color::RED, Vector3(-60, 100, 0) + offset, Vector3(0.45, -0.8, -0.35), "Spot1", GTR::SPOT, 25);
 	GTR::Light* spot2 = new GTR::Light(Color::YELLOW, Vector3(0, 125, 0) + offset, Vector3(0.5, -0.15, -0.8), "Spot2", GTR::SPOT, 25);
@@ -144,9 +145,8 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 
 	if (current_pipeline == DEFERRED) {
 		scene->defineIrradianceGrid(offset);
-		scene->computeIrradiance();
 
-		scene->defineReflectionGrid(offset);
+		//scene->defineReflectionGrid(offset);
 		//scene->computeReflection();
 	}
 
@@ -159,8 +159,10 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 void Application::render(void)
 {
 	GTR::Scene* scene = GTR::Scene::instance;
-	
-	if (current_pipeline == DEFERRED) {
+
+	if (current_pipeline == DEFERRED) 
+	{
+		// STORE RENDER INTO BUFFERS
 		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
 		renderer->renderGBuffers(scene, camera);
 		if (use_ssao) renderer->renderSSAO(camera);
@@ -170,13 +172,22 @@ void Application::render(void)
 		scene->forward_for_blends = false;
 
 		illumination_fbo->unbind();
-		renderer->setDefaultGLFlags();
 
+		// SHOW BUFFERS TO VIEWPORT
+		//set default flags
+		glDisable(GL_BLEND);
 		glDisable(GL_DEPTH_TEST);
+		glEnable(GL_CULL_FACE);
+		glFrontFace(GL_CCW); //instead of GL_CCW
+
 		if (use_gamma_correction)
 			illumination_fbo->color_textures[0]->toViewport(Shader::Get("degammaDeferred"));
 		else
 			illumination_fbo->color_textures[0]->toViewport();
+
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		volumetrics_fbo->color_textures[0]->toViewport();
 
 		if (scene->show_probes)
 			for (auto probe : scene->probes)
@@ -195,7 +206,7 @@ void Application::render(void)
 		if (scene->show_coefficients)
 			scene->probes_texture->toViewport();
 	}
-	else {	
+	else {
 		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
 		renderer->renderSceneForward(scene, camera);
 		renderer->showSceneShadowmaps(shadow_caster_lights);
@@ -257,7 +268,7 @@ void Application::renderDebugGUI(void)
 
 void Application::update(double seconds_elapsed)
 {
-	float speed = seconds_elapsed * cam_speed; //the speed is defined by the seconds_elapsed so it goes constant
+	float speed = seconds_elapsed * cam_speed * 3; //the speed is defined by the seconds_elapsed so it goes constant
 	float orbit_speed = seconds_elapsed * 0.5;
 	
 	//async input to move the camera around

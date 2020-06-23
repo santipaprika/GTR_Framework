@@ -178,7 +178,7 @@ void Light::renderInMenu()
 	switch (light_type)
 	{
 	case GTR::DIRECTIONAL:
-		changed |= ImGui::SliderFloat3("Direction", (float*)&frontVector[0], -1, 1);
+		changed |= ImGui::SliderFloat3("Direction", (float*)&frontVector[0], -0.99, 0.99);
 		break;
 	case GTR::SPOT:
 		changed |= ImGui::SliderFloat3("Direction", (float*)&frontVector[0], -1, 1);

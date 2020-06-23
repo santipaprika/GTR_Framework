@@ -30,6 +30,10 @@ ssao quad.vs ssao.fs
 blur quad.vs blur.fs
 // Probes
 probe basic.vs probe.fs
+// Skybox
+skybox basic.vs skybox.fs
+// Volume scattering
+volumetric quad.vs volumetric.fs
  
 // -------------------------------------------------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------------------------------------------------
@@ -2182,4 +2186,122 @@ void main()
 	vec3 irradiance = ComputeSHIrradiance( N, sh );
 
 	FragColor = vec4(irradiance, 1.0);
+}
+
+
+\skybox.fs
+
+#version 330 core
+in vec3 v_world_position;
+
+uniform samplerCube u_texture;
+uniform vec3 u_camera_position;
+
+out vec4 FragColor;
+
+void main()
+{
+	vec3 V = normalize( u_camera_position - v_world_position );
+
+	FragColor = texture( u_texture, V );
+}
+
+
+\volumetric.fs
+
+#version 330 core
+in vec3 v_world_position;
+
+uniform vec3 u_camera_position;
+uniform int u_quality;
+uniform sampler2D u_noise_tex;
+uniform vec3 u_random;
+
+uniform mat4 u_inverse_viewprojection;
+uniform sampler2D u_depth_texture;
+uniform vec2 u_iRes;
+
+uniform sampler2D u_shadowmap;
+uniform mat4 u_shadow_viewproj;
+uniform float u_shadow_bias;
+uniform int u_light_type;
+uniform vec3 u_light_color;
+
+out vec4 FragColor;
+
+float isShadowed(vec3 pos)	// returns if point is shadowed
+{
+	//project our 3D position to the shadowmap
+	vec4 proj_pos = u_shadow_viewproj * vec4(pos, 1.0);
+
+	//from homogeneus space to clip space
+	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+
+	//from clip space to uv space
+	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+	
+	float dark_outside; //add or not light outside the shadow map zone
+	if(u_light_type == 0) {	//directional light
+		dark_outside = 1.0;
+	}
+	else if (u_light_type == 2) { //spot
+		dark_outside = 0.0;
+	}
+	
+	//get point depth (from -1 to 1)
+	float real_depth = (proj_pos.z - u_shadow_bias) / proj_pos.w;
+
+	//normalize from [-1..+1] to [0..+1]
+	real_depth = real_depth * 0.5 + 0.5;
+	
+	//it is before near or behind far plane
+	if(real_depth < 0.0 || real_depth > 1.0)
+		return dark_outside;	
+	//it is outside on the sides
+	if(shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
+		return dark_outside;
+	
+	//read depth from depth buffer in [0..+1]
+	float shadow_depth = texture2D(u_shadowmap, shadow_uv).x;
+	
+	if( shadow_depth < real_depth )
+		return 0.0;
+	
+	return 1.0;
+}
+
+void main()
+{
+	// reconstruct points
+	vec2 uv = gl_FragCoord.xy * u_iRes; //extract uvs from pixel screenpos
+	//reconstruct world position from depth and inv. viewproj
+	float depth = texture( u_depth_texture, uv ).x;
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+
+	// init volumetric
+	vec3 ray_pos = u_camera_position;
+	vec3 dist = worldpos - ray_pos;
+	vec3 step = dist/u_quality;
+	float noise = texture2D(u_noise_tex, uv * u_random.xy).x;
+	ray_pos += normalize(dist) * noise;
+	
+	float d = length(step);
+	vec3 acc_color = vec3(0.0);
+	float density = 0.0;
+
+	for (int i = 1; i < 10000; i++)
+	{
+		acc_color += (d * u_light_color * isShadowed(ray_pos));
+		density += (0.01 * isShadowed(ray_pos));
+
+		if (density >= 1.0)
+			break;
+		if (i == u_quality)
+			break;
+		ray_pos += step;
+	}
+
+	FragColor = vec4(acc_color, density);
 }

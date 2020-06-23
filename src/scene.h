@@ -2,6 +2,7 @@
 
 #include "framework.h"
 #include "BaseEntity.h"
+#include "extra/hdre.h"
 #include <cassert>
 #include <map>
 #include <string>
@@ -28,6 +29,7 @@ namespace GTR {
 		std::vector<sReflectionProbe*> reflection_probes;
 
 		//Values that defnes the scene
+		Texture* environment;
 		Vector3 ambient_light;
 		Vector4 bg_color;
 		float ambient_power;
@@ -44,6 +46,7 @@ namespace GTR {
 		bool use_irradiance;
 		bool show_coefficients;
 		bool interpolate_probes;
+		bool use_volumetric;
 
 		Vector3 dim_grid;
 		Vector3 start_pos_grid;

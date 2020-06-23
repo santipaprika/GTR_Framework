@@ -42,6 +42,9 @@ void Renderer::renderGBuffers(Scene* scene, Camera* camera)
 	//enable all buffers back
 	gbuffers_fbo->enableAllBuffers();
 
+	//first of all, render the skybox
+	renderSkybox(camera, scene->environment);
+
 	//render everything 
 	renderScene(scene, camera);	// this will call renderToGBuffers for every mesh in the camera frustrum (scene)
 
@@ -165,6 +168,10 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 	//start rendering to the illumination fbo
 	illumination_fbo->bind();
 
+	//FIRST PASS DEFERRED RENDER
+	glDisable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+
 	//clear to bg color (not working?)
 	gbuffers_fbo->enableSingleBuffer(0);
 	Vector4 bg_color = Scene::instance->bg_color;
@@ -174,7 +181,6 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 
 	//we need a fullscreen quad
 	Mesh* quad = Mesh::getQuad();
-
 
 	Shader* sh = Shader::Get("deferred");
 	sh->enable();
@@ -206,19 +212,15 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 	// irradiance uniforms
 	scene->SetIrradianceUniforms(sh);
 
-
-	glDisable(GL_BLEND);
-	glDisable(GL_DEPTH_TEST);
-
 	quad->render(GL_TRIANGLES);
-	
 	sh->disable();
 
+	// RENDER MULTI PASS
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
 
 	bool is_first_pass = true;
-	for (auto light : scene_lights)		// MULTI PASS
+	for (auto light : scene_lights)
 	{
 		Shader* shader;
 		if (light->light_type == GTR::DIRECTIONAL && Scene::instance->use_geometry_on_deferred) {
@@ -296,6 +298,49 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 		shader->disable();
 	}
 
+	// RENDER VOLUME SCATTERING
+	if (scene->use_volumetric)
+	{
+		glDisable(GL_BLEND);
+
+		Texture* noise = Texture::Get("data/textures/noise.png");
+		noise->bind();
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		noise->unbind();
+
+		Application::instance->volumetrics_fbo->bind();
+		Shader* sh = Shader::Get("volumetric");
+		sh->enable();
+		
+		Matrix44 m;
+		sh->setUniform("u_model", m);
+		sh->setUniform("u_camera_position", camera->eye);
+		sh->setUniform("u_viewprojection", camera->viewprojection_matrix);
+
+		sh->setUniform("u_quality", 64);
+		sh->setTexture("u_noise_tex", noise, 2);
+		sh->setUniform("u_random", vec3(random(), random(), random()));
+
+		//pass the inverse projection of the camera to reconstruct world pos.
+		sh->setUniform("u_inverse_viewprojection", inv_vp);
+		sh->setTexture("u_depth_texture", gbuffers_fbo->depth_texture, 1);
+		sh->setUniform("u_iRes", Vector2(1.0 / gbuffers_fbo->width, 1.0 / gbuffers_fbo->height));
+
+		Light* sun = scene_lights[0];
+		sh->setUniform("u_light_color", gamma(sun->color));
+		sh->setUniform("u_light_type", sun->light_type);
+		sh->setUniform("u_shadow_viewproj", sun->camera->viewprojection_matrix);
+		sh->setTexture("u_shadowmap", sun->shadow_fbo->depth_texture, 8);
+		sh->setUniform("u_shadow_bias", (float)sun->shadow_bias);
+
+		quad->render(GL_TRIANGLES);
+		sh->disable();
+		Application::instance->volumetrics_fbo->unbind();
+
+		illumination_fbo->bind();
+		glDisable(GL_BLEND);
+	}
 }
 
 void Renderer::showGBuffers()
@@ -347,6 +392,9 @@ void Renderer::renderSceneForward(GTR::Scene* scene, Camera* camera)
 	glClearColor(bg_color.x, bg_color.y, bg_color.z, bg_color.w);
 
 	setDefaultGLFlags();
+
+	//render skybox
+	if (!Scene::instance->forward_for_blends) renderSkybox(camera, scene->environment);
 
 	//set the camera as default (used by some functions in the framework)
 	camera->enable();
@@ -865,7 +913,37 @@ void Renderer::renderProbe(Vector3 pos, float size, float* coeffs)
 }
 
 
+void Renderer::renderSkybox(Camera* camera, Texture* environment)
+{
+	Mesh* mesh = Mesh::Get("data/meshes/sphere.obj");
+	Shader* shader = Shader::Get("skybox");
+	Matrix44 m;
+	m.setTranslation(camera->eye.x, camera->eye.y, camera->eye.z);
+	m.scale(10,10,10);
 
+	//flags
+	glDisable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+
+	shader->enable();
+
+	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+	shader->setUniform("u_camera_position", camera->eye);
+	shader->setUniform("u_model", m);
+
+	shader->setUniform("u_texture", environment, 0);
+
+	mesh->render(GL_TRIANGLES);
+
+	shader->disable();
+
+	//restore default flags
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glFrontFace(GL_CCW); //instead of GL_CCW
+}
 
 Texture* GTR::CubemapFromHDRE(const char* filename)
 {
@@ -877,8 +955,8 @@ Texture* GTR::CubemapFromHDRE(const char* filename)
 	}
 
 	Texture* texture = new Texture();
-	texture->createCubemap(hdre->width, hdre->height, (Uint8**)hdre->getFaces(0), hdre->header.numChannels == 3 ? GL_RGB : GL_RGBA, GL_FLOAT );
-	for(int i = 1; i < 6; ++i)
+	texture->createCubemap(hdre->width, hdre->height, (Uint8**)hdre->getFaces(0), hdre->header.numChannels == 3 ? GL_RGB : GL_RGBA, GL_FLOAT);
+	for (int i = 1; i < 6; ++i)
 		texture->uploadCubemap(texture->format, texture->type, false, (Uint8**)hdre->getFaces(i), GL_RGBA32F, i);
 	return texture;
 }

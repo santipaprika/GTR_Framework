@@ -36,6 +36,7 @@ Scene::Scene()
 	irr_normal_distance = 1.0f;
 
 	probes_filename = "irradiance.bin";
+	use_volumetric = true;
 }
 
 void Scene::defineIrradianceGrid(Vector3 offset)
@@ -80,6 +81,8 @@ void Scene::defineIrradianceGrid(Vector3 offset)
 				p.pos = start_pos_grid + delta_grid * Vector3(x, y, z);
 				probes.push_back(p);
 			}
+
+	computeIrradiance();
 }
 
 void Scene::computeIrradiance() 
@@ -270,6 +273,7 @@ void Scene::renderInMenu()
 	ImGui::SliderFloat("Power", &ambient_power, 0.0, 1.0);
 	ImGui::ColorEdit3("Color", &ambient_light.x);
 	ImGui::Text("Flags:");
+	ImGui::Checkbox("Use Volume Scattering", &use_volumetric);
 	ImGui::Checkbox("Reverse Shadowmap", &reverse_shadowmap);
 	ImGui::Checkbox("Apply AntiAliasing to Shadows", &AA_shadows);
 	ImGui::Checkbox("Use Irradiance", &use_irradiance);

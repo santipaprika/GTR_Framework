@@ -55,6 +55,7 @@ public:
 	FBO* illumination_fbo;
 	FBO* irr_fbo;
 	FBO* reflections_fbo;
+	FBO* volumetrics_fbo;
 	
 	// SSAO
 	FBO* ssao_fbo;

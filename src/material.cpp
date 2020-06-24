@@ -41,8 +41,18 @@ void Material::setUniforms(Shader* shader, bool is_first_pass) {
 	else
 		shader->setTexture("u_texture", color_texture, 1);
 
-	if (!emissive_texture || !is_first_pass)
-		shader->setTexture("u_emissive_texture", black_tex, 2);
+	if (emissive_factor.x > 1 || emissive_factor.y > 1 || emissive_factor.z > 1)
+		emissive_factor *= 1 / max(max(emissive_factor.x, emissive_factor.y), emissive_factor.z);
+
+	shader->setUniform("u_emissive_factor", emissive_factor);
+
+	if (!emissive_texture)
+	{
+		if (is_first_pass)
+			shader->setTexture("u_emissive_texture", white_tex, 2);
+		else
+			shader->setTexture("u_emissive_texture", black_tex, 2);
+	}
 	else
 		shader->setTexture("u_emissive_texture", emissive_texture, 2);
 
@@ -67,6 +77,7 @@ void Material::renderInMenu()
 	ImGui::Combo("AlphaMode", (int*)&alpha_mode,"NO_ALPHA\0MASK\0BLEND",3);
 	ImGui::SliderFloat("Alpha Cutoff", &alpha_cutoff, 0.0f, 1.0f);
 	ImGui::ColorEdit4("Color", color.v); // Edit 4 floats representing a color + alpha
+	ImGui::ColorEdit3("Emissive Factor", (float*)&emissive_factor);
 	if (color_texture && ImGui::TreeNode(color_texture, "Color Texture"))
 	{
 		int w = ImGui::GetColumnWidth();

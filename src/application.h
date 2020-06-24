@@ -63,6 +63,7 @@ public:
 	std::vector<Vector3> random_points;
 	int kernel_size;
 	float sphere_radius;
+	int number_blur;
 
 	//some vars
 	bool mouse_locked; //tells if the mouse is locked (blocked in the center and not visible)

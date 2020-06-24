@@ -36,8 +36,9 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	render_wireframe = false;
 	use_gamma_correction = false;
 	use_ssao = true;
-	kernel_size = 7;
+	kernel_size = 5;
 	sphere_radius = 3.0f;
+	number_blur = 5;
 
 	fps = 0;
 	frame = 0;
@@ -194,6 +195,7 @@ void Application::render(void)
 				renderer->renderProbe(probe.pos, 5, (float*)&probe.sh);
 
 		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_BLEND);
 
 		renderer->showSceneShadowmaps(shadow_caster_lights);
 
@@ -248,7 +250,7 @@ void Application::renderDebugGUI(void)
 	ImGui::SliderInt("Kernel Size", &kernel_size, 1, 15);
 	if (kernel_size % 2 == 0) kernel_size++;
 	ImGui::SliderFloat("Radius of the spheres", &sphere_radius, 0.0f, 20.0f);
-
+	ImGui::SliderInt("Number of blurs", &number_blur, 1, 10);
 
 	//add info to the debug panel about the camera
 	if (ImGui::TreeNode(camera, "Camera")) {

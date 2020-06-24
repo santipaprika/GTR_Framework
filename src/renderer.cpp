@@ -152,7 +152,16 @@ void Renderer::renderSSAO(Camera* camera)
 	blur_shader->setUniform("u_kernel_size", application->kernel_size);
 	blur_shader->setUniform("u_offset", Vector2(1.0/application->ssao_fbo->color_textures[0]->width, 1.0/application->ssao_fbo->color_textures[0]->height));
 
-	application->ssao_fbo->color_textures[0]->copyTo(application->ssao_blur, blur_shader);
+	for (int i = 0; i < application->number_blur; i++)
+	{
+		if (i % 2) 
+			application->ssao_blur->copyTo(application->ssao_fbo->color_textures[0], blur_shader);
+		else 
+			application->ssao_fbo->color_textures[0]->copyTo(application->ssao_blur, blur_shader);
+	}
+
+	if (application->number_blur % 2)
+		application->ssao_fbo->color_textures[0]->copyTo(application->ssao_blur);
 
 	blur_shader->disable();
 
@@ -350,6 +359,7 @@ void Renderer::showGBuffers()
 	float window_height = application->window_height;
 
 	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_BLEND);
 
 	glViewport(0, window_height * 0.5, window_width * 0.5, window_height * 0.5);
 	if (application->use_gamma_correction)

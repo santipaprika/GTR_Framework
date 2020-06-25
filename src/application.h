@@ -56,7 +56,8 @@ public:
 	FBO* irr_fbo;
 	FBO* reflections_fbo;
 	FBO* volumetrics_fbo;
-	
+	Texture* reflections_component;
+
 	// SSAO
 	FBO* ssao_fbo;
 	Texture* ssao_blur;

@@ -41,6 +41,8 @@ namespace GTR {
 
 		void renderIlluminationToBuffer(Camera* camera);
 
+		void renderReflectionsToBuffer(Camera* camera);
+
 		void showGBuffers();
 
 		void showSSAO();

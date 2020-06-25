@@ -33,6 +33,7 @@ Scene::Scene()
 	use_irradiance = true;
 	show_coefficients = false;
 	interpolate_probes = true;
+	use_reflections = true;
 
 	irr_normal_distance = 1.0f;
 
@@ -284,6 +285,7 @@ void Scene::renderInMenu()
 	ImGui::Checkbox("Reverse Shadowmap", &reverse_shadowmap);
 	ImGui::Checkbox("Apply AntiAliasing to Shadows", &AA_shadows);
 	ImGui::Checkbox("Use Irradiance", &use_irradiance);
+	ImGui::Checkbox("Use Reflections", &use_reflections);
 	ImGui::Checkbox("Show probes", &show_probes);
 	ImGui::Checkbox("Show coefficients", &show_coefficients);
 	ImGui::Checkbox("Interpolate probes", &interpolate_probes);

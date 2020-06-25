@@ -282,28 +282,6 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 			//pass the model to the shader to render the sphere
 			shader->setUniform("u_model", m);
 
-			if (Application::instance->current_pipeline == Application::DEFERRED)
-			{
-				sReflectionProbe* closest_probe = NULL;
-				float min_dist = NULL;
-				for (auto probe : scene->reflection_probes) //compute the nearest reflection probe
-				{
-					float curr_dist = Vector3(probe->pos - camera->eye).length();
-					if (curr_dist < min_dist || min_dist == NULL)
-					{
-						min_dist = curr_dist;
-						closest_probe = probe;
-					}
-				}
-				if (closest_probe)
-				{
-					shader->setUniform("u_exists_cubemap", true);
-					shader->setTexture("u_cubemap_texture", closest_probe->cubemap, 13);
-				}
-				else
-					shader->setUniform("u_exists_cubemap", false);
-			}
-
 			//render only the backfacing triangles of the sphere
 			glEnable(GL_CULL_FACE);
 			glFrontFace(GL_CW);
@@ -329,6 +307,7 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 		shader->disable();
 	}
 
+	
 	// RENDER VOLUME SCATTERING
 	if (scene->use_volumetric)
 	{
@@ -372,6 +351,57 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 		illumination_fbo->bind();
 		glDisable(GL_BLEND);
 	}
+}
+
+void GTR::Renderer::renderReflectionsToBuffer(Camera* camera)
+{
+	std::vector<sReflectionProbe*> reflection_probes_list = Scene::instance->reflection_probes;
+	float min_dist = 400;
+	glDisable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+
+	Mesh* quad = Mesh::getQuad();
+
+	Application::instance->reflections_component->bind();
+
+	glClearColor(0.5, 0.0, 0.0, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+	Shader* shader = Shader::Get("reflection");
+	shader->enable();
+
+	FBO* gbuffers_fbo = Application::instance->gbuffers_fbo;
+	// DEFERRED UNIFORMS
+	//pass the gbuffers to the shader
+	shader->setTexture("u_color_texture", gbuffers_fbo->color_textures[0], 0);
+	shader->setTexture("u_normal_texture", gbuffers_fbo->color_textures[1], 1);
+	shader->setTexture("u_extra_texture", gbuffers_fbo->color_textures[2], 2);
+	shader->setTexture("u_depth_texture", gbuffers_fbo->depth_texture, 3);
+
+	Matrix44 inv_vp_mp = camera->viewprojection_matrix;
+	inv_vp_mp.inverse();
+
+	//pass the inverse projection of the camera to reconstruct world pos.
+	shader->setUniform("u_inverse_viewprojection", inv_vp_mp);
+	//pass the inverse window resolution, this may be useful
+	shader->setUniform("u_iRes", Vector2(1.0 / (float)Application::instance->window_width, 1.0 / (float)Application::instance->window_height));
+
+	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+	shader->setUniform("u_camera_position", camera->eye);
+	Vector3 positions[4] = { reflection_probes_list[0]->pos, reflection_probes_list[1]->pos, reflection_probes_list[2]->pos, reflection_probes_list[3]->pos };
+	shader->setUniform3Array("u_probes_positions", (float*)positions, 4);
+	shader->setTexture("u_cubemap_0", reflection_probes_list[0]->cubemap, 4);
+	shader->setTexture("u_cubemap_1", reflection_probes_list[1]->cubemap, 5);
+	shader->setTexture("u_cubemap_2", reflection_probes_list[2]->cubemap, 6);
+	shader->setTexture("u_cubemap_3", reflection_probes_list[3]->cubemap, 7);
+
+
+	//shader->setTexture("u_cubemap_texture", closest_probe->cubemap, 4);
+
+	quad->render(GL_TRIANGLES);
+	shader->disable();
+
+	Application::instance->reflections_component->unbind();
+	//}
 }
 
 void Renderer::showGBuffers()
@@ -948,7 +978,7 @@ void Renderer::renderReflectionProbe(Vector3 pos, float size, Texture* cubemap)
 {
 	Camera* camera = Application::instance->camera;
 	Mesh* mesh = Mesh::Get("data/meshes/sphere.obj");
-	Shader* shader = Shader::Get("reflection");
+	Shader* shader = Shader::Get("reflectionProbe");
 
 	glEnable(GL_CULL_FACE);
 	glDisable(GL_BLEND);
@@ -964,7 +994,7 @@ void Renderer::renderReflectionProbe(Vector3 pos, float size, Texture* cubemap)
 	shader->setUniform("u_camera_position", camera->eye);
 	shader->setUniform("u_model", model);
 
-	shader->setTexture("u_texture", cubemap, 11);
+	shader->setTexture("u_cubemap_texture", cubemap, 1);
 
 	mesh->render(GL_TRIANGLES);
 }

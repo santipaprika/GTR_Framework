@@ -18,8 +18,6 @@
 #include <cstdio>
 
 Application* Application::instance = nullptr;
-GTR::BaseEntity* selectedEntity = nullptr;
-FBO* fbo = nullptr;
 float cam_speed = 10;
 
 Application::Application(int window_width, int window_height, SDL_Window* window)
@@ -87,11 +85,14 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	irr_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT);
 
 	reflections_fbo = new FBO();
-	reflections_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT);
+	reflections_fbo->create(64, 64, 1, GL_RGBA, GL_UNSIGNED_BYTE);
+
+	reflections_component = new Texture();
+	reflections_component->create(window_width, window_height, GL_RGBA, GL_UNSIGNED_BYTE, false);
 
 	//let's create an FBO to render the AO inside
 	ssao_fbo = new FBO();
-	ssao_fbo->create(window_width/1, window_height/1);
+	ssao_fbo->create(window_width, window_height);
 
 	//maybe we want to create also one for the blur, in this case just create a texture
 	ssao_blur = new Texture();
@@ -133,11 +134,11 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	//pick the texture used for the skybox
 	scene->environment = GTR::CubemapFromHDRE("data/textures/panorama.hdre");
 
-	GTR::Light* spot1 = new GTR::Light(Color::RED, Vector3(-60, 100, 0) + offset, Vector3(0.45, -0.8, -0.35), "Spot1", GTR::SPOT, 10);
+	GTR::Light* spot1 = new GTR::Light(Color::RED, Vector3(-60, 100, 0) + offset, Vector3(0.45, -0.8, -0.35), "Spot1", GTR::SPOT, 20);
 	spot1->spot_cutoff_in_deg = 70;
 	spot1->initializeLightCamera();
 
-	GTR::Light* spot2 = new GTR::Light(Color::YELLOW, Vector3(0, 125, 0) + offset, Vector3(0.5, -0.15, -0.8), "Spot2", GTR::POINT, 10);
+	GTR::Light* spot2 = new GTR::Light(Color::YELLOW, Vector3(0, 125, 0) + offset, Vector3(0.5, -0.15, -0.8), "Spot2", GTR::SPOT, 20);
 	spot2->spot_cutoff_in_deg = 40;
 	spot2->spot_exponent = 40;
 	spot2->initializeLightCamera();
@@ -181,12 +182,25 @@ void Application::render(void)
 		glDisable(GL_BLEND);
 		glDisable(GL_DEPTH_TEST);
 		glEnable(GL_CULL_FACE);
-		glFrontFace(GL_CCW); //instead of GL_CCW
+		glFrontFace(GL_CCW);
 		
 		if (use_gamma_correction)
 			illumination_fbo->color_textures[0]->toViewport(Shader::Get("degammaDeferred"));
 		else
 			illumination_fbo->color_textures[0]->toViewport();
+
+		if (scene->use_reflections)
+		{
+			renderer->renderReflectionsToBuffer(camera);
+			//reflections_component->bind();
+			//glClearColor(0.5, 0.0, 0.0,0.5);
+			//glClear(GL_COLOR_BUFFER_BIT);
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			Texture::UnbindAll();
+			//glViewport(0, 0, window_width, window_height);
+			reflections_component->toViewport();
+		}
 
 		if (scene->use_volumetric)
 		{
@@ -423,7 +437,6 @@ void Application::onKeyDown( SDL_KeyboardEvent event )
 		case SDLK_F1: render_debug = !render_debug; break;
 		case SDLK_F2: render_grid = !render_grid; break;
 		case SDLK_f: camera->center.set(0, 0, 0); camera->updateViewMatrix(); break;
-		case SDLK_SPACE: selectedEntity = NULL;
 		case SDLK_F5: Shader::ReloadAll(); break;
 	}
 }
@@ -512,5 +525,16 @@ void Application::onResize(int width, int height)
 		GL_RGB, 	
 		GL_UNSIGNED_BYTE,
 		false);	
+
+	/*volumetrics_fbo->~FBO();
+	volumetrics_fbo->create(window_width, window_height,
+		1,
+		GL_RGB,
+		GL_UNSIGNED_BYTE,
+		false);*/
+
+	/*reflections_component->~Texture();
+	reflections_component->create(window_width, window_height);*/
+
 }
 

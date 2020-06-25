@@ -48,6 +48,7 @@ namespace GTR {
 		bool show_coefficients;
 		bool interpolate_probes;
 		bool use_volumetric;
+		bool use_reflections;
 
 		Vector3 dim_grid;
 		Vector3 start_pos_grid;

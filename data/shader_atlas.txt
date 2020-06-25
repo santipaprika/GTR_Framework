@@ -31,7 +31,8 @@ blur quad.vs blur.fs
 // Probes
 probe basic.vs probe.fs
 // Reflection
-reflection basic.vs reflection.fs
+reflection quad.vs reflection.fs
+reflectionProbe basic.vs reflectionProbe.fs
 // Skybox
 skybox basic.vs skybox.fs
 // Volume scattering
@@ -2207,8 +2208,7 @@ void main()
 	FragColor = vec4(irradiance, 1.0);
 }
 
-
-\reflection.fs
+\reflectionProbe.fs
 
 #version 330 core
 
@@ -2217,7 +2217,7 @@ in vec3 v_normal;
 in vec4 v_color;
 
 uniform vec3 u_camera_position;
-uniform samplerCube u_texture;
+uniform samplerCube u_cubemap_texture;
 
 out vec4 FragColor;
 
@@ -2229,10 +2229,94 @@ void main()
 	vec3 R = reflect( -V, N );
 
 	//compute the reflection
-	vec3 reflection = textureLod( u_texture, R, 0.0 * 5.0 ).xyz;
+	vec3 reflection = textureLod( u_cubemap_texture, R, 0.0 ).xyz;
 
 	//set the metalness as alpha
 	FragColor = vec4( reflection, 1.0 );
+}
+
+
+\reflection.fs
+
+#version 330 core
+
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec4 v_color;
+in vec2 v_uv;
+
+uniform vec3 u_camera_position;
+uniform samplerCube u_cubemap_texture;
+
+#include "getDeferredUniforms"
+
+uniform vec3 u_probes_positions[4];
+uniform samplerCube u_cubemap_0;
+uniform samplerCube u_cubemap_1;
+uniform samplerCube u_cubemap_2;
+uniform samplerCube u_cubemap_3;
+
+out vec4 FragColor;
+
+/* struct Probe
+{
+	vec3 pos;
+	Sampler2D cubemap_texture;
+} */
+
+/* void defineProbes(out rProbes)
+{
+	
+} */
+
+void main()
+{
+    #include "reconstructFromGBuffers"
+	
+	vec3 V = normalize( u_camera_position - worldpos );
+
+	vec3 R = reflect( -V, N );
+	
+	float metalness = texture( u_color_texture, uv ).w;
+	float roughness = texture( u_normal_texture, uv ).w;
+
+	//Probe rProbes[4];
+	/* for (int i=0; i<4; i++) //store probe info in struct variables
+	{
+		rProbes[i].pos = u_probes_positions[i];
+		rProbes[i].cubemap_texture = u_probes_cubemaps[i];
+	} */
+	
+	float min_dist = 400;
+	int closest_probe_idx = -1;
+	for (int i=0; i<4; i++) //compute the nearest reflection probe
+	{
+		float curr_dist = length(u_probes_positions[i] - worldpos);
+		if (curr_dist < min_dist)
+		{
+			min_dist = curr_dist;
+			closest_probe_idx = i;
+		}
+	}
+	
+	vec3 reflection = vec3(0.0);
+	
+	if (closest_probe_idx == 0)
+		reflection = textureLod( u_cubemap_0, R, roughness * 5.0 ).xyz;
+	else if (closest_probe_idx == 1)
+		reflection = textureLod( u_cubemap_1, R, roughness * 5.0 ).xyz;
+	else if (closest_probe_idx == 2)
+		reflection = textureLod( u_cubemap_2, R, roughness * 5.0 ).xyz;
+	else if (closest_probe_idx == 3)
+		reflection = textureLod( u_cubemap_3, R, roughness * 5.0 ).xyz;
+	else
+	{
+		FragColor = vec4( 0.0 );
+		return;
+	}
+	
+	FragColor = vec4( reflection , metalness );	// metalness as alpha
+	
 }
 
 

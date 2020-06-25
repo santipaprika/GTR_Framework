@@ -129,26 +129,28 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	sun->intensity = 20;
 	sun->ortho_cam_size = 1000;
 	sun->initializeLightCamera();
-	scene->AddEntity(sun);
 
 	//pick the texture used for the skybox
 	scene->environment = GTR::CubemapFromHDRE("data/textures/panorama.hdre");
 
-	GTR::Light* spot1 = new GTR::Light(Color::RED, Vector3(-60, 100, 0) + offset, Vector3(0.45, -0.8, -0.35), "Spot1", GTR::SPOT, 25);
-	GTR::Light* spot2 = new GTR::Light(Color::YELLOW, Vector3(0, 125, 0) + offset, Vector3(0.5, -0.15, -0.8), "Spot2", GTR::SPOT, 25);
+	GTR::Light* spot1 = new GTR::Light(Color::RED, Vector3(-60, 100, 0) + offset, Vector3(0.45, -0.8, -0.35), "Spot1", GTR::SPOT, 10);
+	spot1->spot_cutoff_in_deg = 70;
+	spot1->initializeLightCamera();
+
+	GTR::Light* spot2 = new GTR::Light(Color::YELLOW, Vector3(0, 125, 0) + offset, Vector3(0.5, -0.15, -0.8), "Spot2", GTR::POINT, 10);
 	spot2->spot_cutoff_in_deg = 40;
 	spot2->spot_exponent = 40;
 	spot2->initializeLightCamera();
+	scene->AddEntity(sun);
 	scene->AddEntity(spot1);
 	scene->AddEntity(spot2);
 
 	random_points = GTR::generateSpherePoints(100, sphere_radius, true);
 
-	if (current_pipeline == DEFERRED) {
+	if (current_pipeline == DEFERRED) 
+	{
 		scene->defineIrradianceGrid(offset);
-
-		//scene->defineReflectionGrid(offset);
-		//scene->computeReflection();
+		scene->defineReflectionGrid(offset);
 	}
 
 	//hide the cursor
@@ -180,19 +182,26 @@ void Application::render(void)
 		glDisable(GL_DEPTH_TEST);
 		glEnable(GL_CULL_FACE);
 		glFrontFace(GL_CCW); //instead of GL_CCW
-
+		
 		if (use_gamma_correction)
 			illumination_fbo->color_textures[0]->toViewport(Shader::Get("degammaDeferred"));
 		else
 			illumination_fbo->color_textures[0]->toViewport();
 
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		volumetrics_fbo->color_textures[0]->toViewport();
+		if (scene->use_volumetric)
+		{
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			volumetrics_fbo->color_textures[0]->toViewport();
+		}
 
 		if (scene->show_probes)
 			for (auto probe : scene->probes)
-				renderer->renderProbe(probe.pos, 5, (float*)&probe.sh);
+				renderer->renderIrradianceProbe(probe.pos, 5, (float*)&probe.sh);
+
+		if (scene->show_rProbes)
+			for (auto rProbe : scene->reflection_probes)
+				renderer->renderReflectionProbe(rProbe->pos, 5, rProbe->cubemap);
 
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_BLEND);

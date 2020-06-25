@@ -43,6 +43,7 @@ namespace GTR {
 		bool forward_for_blends;
 		bool show_ssao;
 		bool show_probes;
+		bool show_rProbes;
 		bool use_irradiance;
 		bool show_coefficients;
 		bool interpolate_probes;

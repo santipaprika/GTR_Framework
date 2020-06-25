@@ -29,6 +29,7 @@ Scene::Scene()
 	forward_for_blends = false;
 	show_ssao = false;
 	show_probes = false;
+	show_rProbes = false;
 	use_irradiance = true;
 	show_coefficients = false;
 	interpolate_probes = true;
@@ -154,7 +155,6 @@ void Scene::writeProbesToDisk()
 	fclose(f);
 
 	std::cout << "* Probes coefficients written in " + probes_filename + "\n";
-
 }
 
 bool Scene::loadProbesFromDisk()
@@ -203,18 +203,29 @@ void Scene::SetIrradianceUniforms(Shader* shader)
 
 void Scene::defineReflectionGrid(Vector3 offset)
 {
-	sReflectionProbe* rProbe = new sReflectionProbe();
-	//set it up
-	rProbe->pos.set(90, 56, -72);
-	rProbe->pos += offset;
-	rProbe->cubemap = new Texture();
-	rProbe->cubemap->createCubemap(
-		512, 512,
-		NULL,
-		GL_RGB, GL_UNSIGNED_INT, false);
+	int N = 4; //number of probes
 
-	//add it to the list
-	reflection_probes.push_back(rProbe);
+	for (int i = 0; i < N; i++)
+	{
+		sReflectionProbe* rProbe = new sReflectionProbe();
+		//set it up
+		rProbe->pos.set(-250, 56, 0);
+		rProbe->pos += offset + Vector3(i*300,0,0);
+		rProbe->cubemap = new Texture();
+		rProbe->cubemap->createCubemap(
+			512, 512,
+			NULL,
+			GL_RGB, GL_UNSIGNED_INT, false);
+
+		//add it to the list
+		reflection_probes.push_back(rProbe);
+
+		rProbe->cubemap->bind();
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	}
+
+	computeReflection();
 }
 
 void Scene::computeReflection()
@@ -222,22 +233,19 @@ void Scene::computeReflection()
 	Camera cam;
 	for (sReflectionProbe* rProbe : reflection_probes)
 	{
-
 		//render the view from every side
 		for (int i = 0; i < 6; ++i)
 		{
 			Application* application = Application::instance;
 			//assign cubemap face to FBO
 			application->reflections_fbo->setTexture(rProbe->cubemap, i);
-
-			//bind FBO
-			application->reflections_fbo->bind();
-
+			
 			//render view
 			Vector3 eye = rProbe->pos;
 			Vector3 center = rProbe->pos + cubemapFaceNormals[i][2];
 			Vector3 up = cubemapFaceNormals[i][1];
-			cam.lookAt(eye, center, up);
+			cam.lookAt(eye, center, up); 
+			cam.setPerspective(90.0f, 1, 1.0f, 10000.f);
 			cam.enable();
 			application->current_pipeline = Application::FORWARD;
 			std::vector<GTR::Light*> shadow_caster_lights = application->renderer->renderSceneShadowmaps(Scene::instance);
@@ -246,10 +254,9 @@ void Scene::computeReflection()
 			application->current_pipeline = Application::DEFERRED;
 			application->reflections_fbo->unbind();
 		}
-
+		
 		//generate the mipmaps
 		rProbe->cubemap->generateMipmaps();
-
 	}
 }
 
@@ -284,6 +291,7 @@ void Scene::renderInMenu()
 		computeIrradiance();
 	}
 	ImGui::DragFloat("Irr normal distance", &irr_normal_distance, .1f);
+	ImGui::Checkbox("Show reflection probes", &show_rProbes);
 
 	if (Application::instance->current_pipeline == Application::DEFERRED)
 	{

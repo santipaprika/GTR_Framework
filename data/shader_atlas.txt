@@ -30,6 +30,8 @@ ssao quad.vs ssao.fs
 blur quad.vs blur.fs
 // Probes
 probe basic.vs probe.fs
+// Reflection
+reflection basic.vs reflection.fs
 // Skybox
 skybox basic.vs skybox.fs
 // Volume scattering
@@ -107,8 +109,8 @@ mat.LdotH = clamp( dot(mat.L,mat.H), 0.0, 1.0 );
 
 vec4 mat_properties = texture( u_occlusion_texture, uv * u_tiles_number);
 mat.albedo = texture( u_texture, uv * u_tiles_number).xyz;
-mat.roughness = mat_properties.y;
-mat.metalness = mat_properties.z;
+mat.roughness = mat_properties.y * u_roughness_factor;
+mat.metalness = mat_properties.z * u_metallic_factor;
 
 //we compute the reflection in base to the color and the metalness
 vec3 f0 = mat.albedo * mat.metalness + (vec3(0.5) * (1.0 - mat.metalness));
@@ -153,7 +155,16 @@ vec3 f0 = mat.albedo * mat.metalness + (vec3(0.5) * (1.0 - mat.metalness));
 vec3 diffuseColor = (1.0 - mat.metalness) * mat.albedo;
 
 //compute the specular
-vec3 Fr_d = specularBRDF(mat.roughness, f0, mat.NdotH, mat.NdotV, mat.NdotL, mat.LdotH);
+//vec3 Fr_d = specularBRDF(mat.roughness, f0, mat.NdotH, mat.NdotV, mat.NdotL, mat.LdotH);
+float mip_level = mat.roughness;
+
+vec3 Fr_d = vec3(0.0);
+
+if (u_exists_cubemap)
+	//Fr_d = textureLod( u_cubemap_texture, mat.R, mip_level ).xyz;
+	Fr_d = specularBRDF(mat.roughness, f0, mat.NdotH, mat.NdotV, mat.NdotL, mat.LdotH);
+else
+	Fr_d = specularBRDF(mat.roughness, f0, mat.NdotH, mat.NdotV, mat.NdotL, mat.LdotH);
 
 // Here we use the Burley, but you can replace it by the Lambert.
 float linearRoughness = pow(mat.roughness, 2);
@@ -167,6 +178,10 @@ vec3 direct = Fr_d + Fd_d;
 \PBRFunctions
 uniform vec3 u_camera_pos;
 uniform int illumination_technique;
+uniform samplerCube u_cubemap_texture;
+uniform bool u_exists_cubemap;
+uniform float u_roughness_factor;
+uniform float u_metallic_factor;
 
 // Material struct where we will be storing the data
 struct Material 
@@ -1087,6 +1102,9 @@ in vec2 v_uv;
 
 #include "getTextureUniforms"
 
+uniform float u_roughness_factor;
+uniform float u_metallic_factor;
+
 uniform bool u_use_gamma_correction;
 
 layout(location = 0) out vec4 FragColor;
@@ -1121,10 +1139,10 @@ void main()
 	if(	color.a < 0.9 && floor(mod(gl_FragCoord.x,2.0)) != floor(mod(gl_FragCoord.y,2.0)) )
 		discard;
 
-	FragColor = vec4(color.xyz, matProperties.z);
+	FragColor = vec4(color.xyz, matProperties.z * u_metallic_factor);
 	
 	vec3 N = normalize(v_normal);
-	NormalColor = vec4(N*0.5 + vec3(0.5), matProperties.y);
+	NormalColor = vec4(N*0.5 + vec3(0.5), matProperties.y * u_roughness_factor);
 	
 	
 	
@@ -1195,7 +1213,7 @@ vec3 getIrradiance(vec3 worldpos, vec3 N)
 	//computing nearest probe index based on world position
 	vec3 irr_range = u_irr_end - u_irr_start;
 	vec3 grid_pos = worldpos - u_irr_start;
-	vec3 irr_local_pos = clamp( worldpos - u_irr_start 
+	vec3 irr_local_pos = clamp( worldpos - u_irr_start
 + N * u_irr_normal_distance * u_irr_delta, //offset a little
 	 vec3(0.0), irr_range );
 	 
@@ -2187,6 +2205,34 @@ void main()
 	vec3 irradiance = ComputeSHIrradiance( N, sh );
 
 	FragColor = vec4(irradiance, 1.0);
+}
+
+
+\reflection.fs
+
+#version 330 core
+
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec4 v_color;
+
+uniform vec3 u_camera_position;
+uniform samplerCube u_texture;
+
+out vec4 FragColor;
+
+void main()
+{
+	vec3 N = normalize( v_normal );
+	vec3 V = normalize( u_camera_position - v_world_position );
+
+	vec3 R = reflect( -V, N );
+
+	//compute the reflection
+	vec3 reflection = textureLod( u_texture, R, 0.0 * 5.0 ).xyz;
+
+	//set the metalness as alpha
+	FragColor = vec4( reflection, 1.0 );
 }
 
 

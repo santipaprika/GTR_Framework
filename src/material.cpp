@@ -36,7 +36,7 @@ void Material::setUniforms(Shader* shader, bool is_first_pass) {
 	else
 		shader->setUniform("u_color", color);
 
-	if (!color_texture || !is_first_pass)
+	if (!color_texture)
 		shader->setTexture("u_texture", white_tex, 1);
 	else
 		shader->setTexture("u_texture", color_texture, 1);
@@ -56,13 +56,18 @@ void Material::setUniforms(Shader* shader, bool is_first_pass) {
 	else
 		shader->setTexture("u_emissive_texture", emissive_texture, 2);
 
-	if (!occlusion_texture || !is_first_pass)
-		shader->setTexture("u_occlusion_texture", white_tex, 3);
+	if (!occlusion_texture)
+	{
+			shader->setTexture("u_occlusion_texture", white_tex, 3);
+	}
 	else
 		shader->setTexture("u_occlusion_texture", occlusion_texture, 3);
 
 	shader->setUniform("u_color", Vector4(gamma(color.xyz()), color.w));
 	shader->setUniform("u_tiles_number", tiles_number);
+
+	shader->setUniform("u_roughness_factor", roughness_factor);
+	shader->setUniform("u_metallic_factor", metallic_factor);
 
 	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
 	shader->setUniform("u_alpha_cutoff", alpha_mode == GTR::AlphaMode::MASK ? alpha_cutoff : 0);
@@ -78,6 +83,8 @@ void Material::renderInMenu()
 	ImGui::SliderFloat("Alpha Cutoff", &alpha_cutoff, 0.0f, 1.0f);
 	ImGui::ColorEdit4("Color", color.v); // Edit 4 floats representing a color + alpha
 	ImGui::ColorEdit3("Emissive Factor", (float*)&emissive_factor);
+	ImGui::SliderFloat("Roughness", &roughness_factor, 0.0f, 1.0f);
+	ImGui::SliderFloat("Metalness", &metallic_factor, 0.0f, 1.0f);
 	if (color_texture && ImGui::TreeNode(color_texture, "Color Texture"))
 	{
 		int w = ImGui::GetColumnWidth();

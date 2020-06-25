@@ -282,6 +282,28 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 			//pass the model to the shader to render the sphere
 			shader->setUniform("u_model", m);
 
+			if (Application::instance->current_pipeline == Application::DEFERRED)
+			{
+				sReflectionProbe* closest_probe = NULL;
+				float min_dist = NULL;
+				for (auto probe : scene->reflection_probes) //compute the nearest reflection probe
+				{
+					float curr_dist = Vector3(probe->pos - camera->eye).length();
+					if (curr_dist < min_dist || min_dist == NULL)
+					{
+						min_dist = curr_dist;
+						closest_probe = probe;
+					}
+				}
+				if (closest_probe)
+				{
+					shader->setUniform("u_exists_cubemap", true);
+					shader->setTexture("u_cubemap_texture", closest_probe->cubemap, 13);
+				}
+				else
+					shader->setUniform("u_exists_cubemap", false);
+			}
+
 			//render only the backfacing triangles of the sphere
 			glEnable(GL_CULL_FACE);
 			glFrontFace(GL_CW);
@@ -890,11 +912,11 @@ void Renderer::computeIrradianceCoefficients(sProbe &probe, Scene* scene)
 
 }
 
-void Renderer::renderProbe(Vector3 pos, float size, float* coeffs)
+void Renderer::renderIrradianceProbe(Vector3 pos, float size, float* coeffs)
 {
 	Camera* camera = Application::instance->camera;
-	Shader* shader = Shader::Get("probe");
 	Mesh* mesh = Mesh::Get("data/meshes/sphere.obj");
+	Shader* shader = Shader::Get("probe");
 
 	glEnable(GL_CULL_FACE);
 	glDisable(GL_BLEND);
@@ -922,6 +944,30 @@ void Renderer::renderProbe(Vector3 pos, float size, float* coeffs)
 	mesh->render(GL_TRIANGLES);
 }
 
+void Renderer::renderReflectionProbe(Vector3 pos, float size, Texture* cubemap)
+{
+	Camera* camera = Application::instance->camera;
+	Mesh* mesh = Mesh::Get("data/meshes/sphere.obj");
+	Shader* shader = Shader::Get("reflection");
+
+	glEnable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+
+	Matrix44 model;
+	model.setTranslation(pos.x, pos.y, pos.z);
+	model.scale(size, size, size);
+
+	Application* application = Application::instance;
+	shader->enable();
+	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+	shader->setUniform("u_camera_position", camera->eye);
+	shader->setUniform("u_model", model);
+
+	shader->setTexture("u_texture", cubemap, 11);
+
+	mesh->render(GL_TRIANGLES);
+}
 
 void Renderer::renderSkybox(Camera* camera, Texture* environment)
 {

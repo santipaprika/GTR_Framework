@@ -35,6 +35,7 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 
 	render_wireframe = false;
 	use_gamma_correction = false;
+	use_volumetrics = true;
 	use_ssao = true;
 	kernel_size = 7;
 	sphere_radius = 3.0f;
@@ -143,11 +144,10 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 
 	random_points = GTR::generateSpherePoints(100, sphere_radius, true);
 
-	if (current_pipeline == DEFERRED) {
+	if (current_pipeline == DEFERRED) 
+	{
 		scene->defineIrradianceGrid(offset);
-
-		//scene->defineReflectionGrid(offset);
-		//scene->computeReflection();
+		scene->defineReflectionGrid(offset);
 	}
 
 	//hide the cursor
@@ -179,19 +179,26 @@ void Application::render(void)
 		glDisable(GL_DEPTH_TEST);
 		glEnable(GL_CULL_FACE);
 		glFrontFace(GL_CCW); //instead of GL_CCW
-
+		
 		if (use_gamma_correction)
 			illumination_fbo->color_textures[0]->toViewport(Shader::Get("degammaDeferred"));
 		else
 			illumination_fbo->color_textures[0]->toViewport();
 
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		volumetrics_fbo->color_textures[0]->toViewport();
+		if (use_volumetrics)
+		{
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			volumetrics_fbo->color_textures[0]->toViewport();
+		}
 
 		if (scene->show_probes)
 			for (auto probe : scene->probes)
-				renderer->renderProbe(probe.pos, 5, (float*)&probe.sh);
+				renderer->renderIrradianceProbe(probe.pos, 5, (float*)&probe.sh);
+
+		if (scene->show_rProbes)
+			for (auto rProbe : scene->reflection_probes)
+				renderer->renderReflectionProbe(rProbe->pos, 5, rProbe->cubemap);
 
 		glDisable(GL_DEPTH_TEST);
 

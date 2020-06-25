@@ -67,6 +67,8 @@ void Material::renderInMenu()
 	ImGui::Combo("AlphaMode", (int*)&alpha_mode,"NO_ALPHA\0MASK\0BLEND",3);
 	ImGui::SliderFloat("Alpha Cutoff", &alpha_cutoff, 0.0f, 1.0f);
 	ImGui::ColorEdit4("Color", color.v); // Edit 4 floats representing a color + alpha
+	ImGui::SliderFloat("Roughness", &roughness_factor, 0.0f, 1.0f);
+	ImGui::SliderFloat("Metalness", &metallic_factor, 0.0f, 1.0f);
 	if (color_texture && ImGui::TreeNode(color_texture, "Color Texture"))
 	{
 		int w = ImGui::GetColumnWidth();

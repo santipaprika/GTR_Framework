@@ -37,6 +37,7 @@ public:
 	bool rendering_shadowmap;
 	bool use_gamma_correction;
 	bool use_ssao;
+	bool use_volumetrics;
 
 	GTR::Light* light_selected;
 	GTR::PrefabEntity* prefab_selected;

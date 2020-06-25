@@ -87,7 +87,9 @@ namespace GTR {
 		// PROBES
 		void computeIrradianceCoefficients(sProbe &probe, Scene* scene);
 
-		void renderProbe(Vector3 pos, float size, float* coeffs);
+		void renderIrradianceProbe(Vector3 pos, float size, float* coeffs);
+
+		void renderReflectionProbe(Vector3 pos, float size, Texture* cubemap);
 
 		// SKYBOX
 		void renderSkybox(Camera* camera, Texture* environment);

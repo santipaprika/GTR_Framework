@@ -30,6 +30,8 @@ ssao quad.vs ssao.fs
 blur quad.vs blur.fs
 // Probes
 probe basic.vs probe.fs
+// Reflection
+reflection basic.vs reflection.fs
 // Skybox
 skybox basic.vs skybox.fs
 // Volume scattering
@@ -152,7 +154,9 @@ vec3 f0 = mat.albedo * mat.metalness + (vec3(0.5) * (1.0 - mat.metalness));
 vec3 diffuseColor = (1.0 - mat.metalness) * mat.albedo;
 
 //compute the specular
-vec3 Fr_d = specularBRDF(mat.roughness, f0, mat.NdotH, mat.NdotV, mat.NdotL, mat.LdotH);
+//vec3 Fr_d = specularBRDF(mat.roughness, f0, mat.NdotH, mat.NdotV, mat.NdotL, mat.LdotH);
+float mip_level = mat.roughness;
+vec3 Fr_d = textureLod( u_cubemap_texture, mat.R, mip_level ).xyz;
 
 // Here we use the Burley, but you can replace it by the Lambert.
 float linearRoughness = pow(mat.roughness, 2);
@@ -166,6 +170,7 @@ vec3 direct = Fr_d + Fd_d;
 \PBRFunctions
 uniform vec3 u_camera_pos;
 uniform int illumination_technique;
+uniform samplerCube u_cubemap_texture;
 
 // Material struct where we will be storing the data
 struct Material 
@@ -1194,7 +1199,7 @@ vec3 getIrradiance(vec3 worldpos, vec3 N)
 	//computing nearest probe index based on world position
 	vec3 irr_range = u_irr_end - u_irr_start;
 	vec3 grid_pos = worldpos - u_irr_start;
-	vec3 irr_local_pos = clamp( worldpos - u_irr_start 
+	vec3 irr_local_pos = clamp( worldpos - u_irr_start
 + N * u_irr_normal_distance * u_irr_delta, //offset a little
 	 vec3(0.0), irr_range );
 	 
@@ -2186,6 +2191,34 @@ void main()
 	vec3 irradiance = ComputeSHIrradiance( N, sh );
 
 	FragColor = vec4(irradiance, 1.0);
+}
+
+
+\reflection.fs
+
+#version 330 core
+
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec4 v_color;
+
+uniform vec3 u_camera_position;
+uniform samplerCube u_texture;
+
+out vec4 FragColor;
+
+void main()
+{
+	vec3 N = normalize( v_normal );
+	vec3 V = normalize( u_camera_position - v_world_position );
+
+	vec3 R = reflect( -V, N );
+
+	//compute the reflection
+	vec3 reflection = textureLod( u_texture, R, 0.0 * 5.0 ).xyz;
+
+	//set the metalness as alpha
+	FragColor = vec4( reflection, 1.0 );
 }
 
 

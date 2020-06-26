@@ -126,8 +126,7 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	GTR::Prefab* car_prefab = GTR::Prefab::Get("data/prefabs/gmc/scene.gltf");
 	scene->AddEntity(new GTR::PrefabEntity(car_prefab, Vector3(450, -28, 0) + offset, Vector3(0,0,0),"Car")); //last prefab is the car, due to the blend materials
 
-	GTR::Light* sun = new GTR::Light(Color::WHITE, Vector3(0, 0, 0) + offset, Vector3(0.8, -0.45, -0.4), "Sun", GTR::DIRECTIONAL);
-	sun->intensity = 20;
+	GTR::Light* sun = new GTR::Light(Color::WHITE, Vector3(0, 0, 0) + offset, Vector3(0.8, -0.45, -0.4), "Sun", GTR::DIRECTIONAL, 5);
 	sun->ortho_cam_size = 1000;
 	sun->initializeLightCamera();
 

@@ -2250,24 +2250,23 @@ uniform samplerCube u_cubemap_texture;
 
 #include "getDeferredUniforms"
 
-uniform vec3 u_probes_positions[4];
+uniform vec3 u_probes_positions[10];
 uniform samplerCube u_cubemap_0;
 uniform samplerCube u_cubemap_1;
 uniform samplerCube u_cubemap_2;
 uniform samplerCube u_cubemap_3;
+uniform samplerCube u_cubemap_4;
+uniform samplerCube u_cubemap_5;
+uniform samplerCube u_cubemap_6;
+uniform samplerCube u_cubemap_7;
+uniform samplerCube u_cubemap_8;
+uniform samplerCube u_cubemap_9;
+
+uniform float u_normal_distance;
 
 out vec4 FragColor;
 
-/* struct Probe
-{
-	vec3 pos;
-	Sampler2D cubemap_texture;
-} */
 
-/* void defineProbes(out rProbes)
-{
-	
-} */
 
 void main()
 {
@@ -2279,19 +2278,12 @@ void main()
 	
 	float metalness = texture( u_color_texture, uv ).w;
 	float roughness = texture( u_normal_texture, uv ).w;
-
-	//Probe rProbes[4];
-	/* for (int i=0; i<4; i++) //store probe info in struct variables
-	{
-		rProbes[i].pos = u_probes_positions[i];
-		rProbes[i].cubemap_texture = u_probes_cubemaps[i];
-	} */
 	
 	float min_dist = 400;
 	int closest_probe_idx = -1;
-	for (int i=0; i<4; i++) //compute the nearest reflection probe
+	for (int i=0; i<10; i++) //compute the nearest reflection probe
 	{
-		float curr_dist = length(u_probes_positions[i] - worldpos);
+		float curr_dist = length(u_probes_positions[i] - (worldpos + u_normal_distance * N));
 		if (curr_dist < min_dist)
 		{
 			min_dist = curr_dist;
@@ -2309,6 +2301,18 @@ void main()
 		reflection = textureLod( u_cubemap_2, R, roughness * 5.0 ).xyz;
 	else if (closest_probe_idx == 3)
 		reflection = textureLod( u_cubemap_3, R, roughness * 5.0 ).xyz;
+	else if (closest_probe_idx == 4)
+		reflection = textureLod( u_cubemap_4, R, roughness * 5.0 ).xyz;
+	else if (closest_probe_idx == 5)
+		reflection = textureLod( u_cubemap_5, R, roughness * 5.0 ).xyz;
+	else if (closest_probe_idx == 6)
+		reflection = textureLod( u_cubemap_6, R, roughness * 5.0 ).xyz;
+	else if (closest_probe_idx == 7)
+		reflection = textureLod( u_cubemap_7, R, roughness * 5.0 ).xyz;
+	else if (closest_probe_idx == 8)
+		reflection = textureLod( u_cubemap_8, R, roughness * 5.0 ).xyz;
+	else if (closest_probe_idx == 9)
+		reflection = textureLod( u_cubemap_9, R, roughness * 5.0 ).xyz;
 	else
 	{
 		//avoid misleading information on points far to proves

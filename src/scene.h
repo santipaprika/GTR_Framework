@@ -55,6 +55,7 @@ namespace GTR {
 		Vector3 end_pos_grid;
 		Vector3 delta_grid;
 		float irr_normal_distance;
+		float refl_normal_distance;
 
 		Texture* probes_texture;
 
@@ -83,6 +84,7 @@ namespace GTR {
 
 		// Reflection
 		void defineReflectionGrid(Vector3 offset);
+		void placeReflectionProbe(Vector3 pos, Vector3 offset = Vector3(0,0,0));
 		void computeReflection();
 
 		void AddEntity(BaseEntity* entity);

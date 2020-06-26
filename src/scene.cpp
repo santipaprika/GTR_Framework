@@ -36,6 +36,7 @@ Scene::Scene()
 	use_reflections = true;
 
 	irr_normal_distance = 1.0f;
+	refl_normal_distance = 50;
 
 	probes_filename = "irradiance.bin";
 	use_volumetric = true;
@@ -204,29 +205,79 @@ void Scene::SetIrradianceUniforms(Shader* shader)
 
 void Scene::defineReflectionGrid(Vector3 offset)
 {
-	int N = 4; //number of probes
+	Vector3 start_refl_grid;
+	start_refl_grid.set(-20, 70, 0);
 
-	for (int i = 0; i < N; i++)
-	{
-		sReflectionProbe* rProbe = new sReflectionProbe();
-		//set it up
-		rProbe->pos.set(-250, 56, 0);
-		rProbe->pos += offset + Vector3(i*300,0,0);
-		rProbe->cubemap = new Texture();
-		rProbe->cubemap->createCubemap(
-			512, 512,
-			NULL,
-			GL_RGB, GL_UNSIGNED_INT, false);
+	Vector3 end_refl_grid;
+	end_refl_grid.set(200, 90, 80);
 
-		//add it to the list
-		reflection_probes.push_back(rProbe);
+	start_refl_grid += offset;
+	end_refl_grid += offset;
 
-		rProbe->cubemap->bind();
-		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	}
+	//define how many probes you want per dimension
+	Vector3 dim_refl_grid;
+	dim_refl_grid.set(2, 1, 1);
+
+	//compute the vector from one corner to the other
+	Vector3 delta_refl_grid;
+	delta_refl_grid = (end_refl_grid - start_refl_grid);
+
+	//and scale it down according to the subdivisions
+	//we substract one to be sure the last probe is at end pos
+	delta_refl_grid.x /= (dim_refl_grid.x - 1);
+	//delta_refl_grid.y /= (dim_refl_grid.y - 1);
+	//delta_refl_grid.z /= (dim_refl_grid.z - 1);
+
+	for (int z = 0; z < dim_refl_grid.z; ++z)
+		for (int y = 0; y < dim_refl_grid.y; ++y)
+			for (int x = 0; x < dim_refl_grid.x; ++x)
+			{
+				sReflectionProbe* rProbe = new sReflectionProbe();
+
+				//and its position
+				rProbe->pos = start_refl_grid + delta_refl_grid * Vector3(x, y, z);
+				rProbe->cubemap = new Texture();
+				rProbe->cubemap->createCubemap(
+					512, 512,
+					NULL,
+					GL_RGB, GL_UNSIGNED_INT, false);
+
+				reflection_probes.push_back(rProbe);
+
+				rProbe->cubemap->bind();
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			}
+
+	placeReflectionProbe(Vector3(0, 270, 0), offset);	// top house
+	placeReflectionProbe(Vector3(-20, 40, -180), offset);	// inside house
+	placeReflectionProbe(Vector3(0, 270, -200), offset);	// top behind house
+	placeReflectionProbe(Vector3(-160, 70, -100), offset);	// left house
+	placeReflectionProbe(Vector3(380, 110, 0), offset);	// right house
+	placeReflectionProbe(Vector3(100, 70, 120), offset);	// front house
+	placeReflectionProbe(Vector3(-20, 40, -340), offset); //behind left house
+	placeReflectionProbe(Vector3(200, 40, -250), offset); //behind right house
 
 	computeReflection();
+}
+
+void Scene::placeReflectionProbe(Vector3 pos, Vector3 offset)
+{
+	sReflectionProbe* rProbe = new sReflectionProbe();
+
+	//top probe
+	rProbe->pos = pos + offset;
+	rProbe->cubemap = new Texture();
+	rProbe->cubemap->createCubemap(
+		512, 512,
+		NULL,
+		GL_RGB, GL_UNSIGNED_INT, false);
+
+	reflection_probes.push_back(rProbe);
+
+	rProbe->cubemap->bind();
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
 void Scene::computeReflection()
@@ -294,6 +345,7 @@ void Scene::renderInMenu()
 	}
 	ImGui::DragFloat("Irr normal distance", &irr_normal_distance, .1f);
 	ImGui::Checkbox("Show reflection probes", &show_rProbes);
+	ImGui::DragFloat("Refl normal distance", &refl_normal_distance);
 
 	if (Application::instance->current_pipeline == Application::DEFERRED)
 	{

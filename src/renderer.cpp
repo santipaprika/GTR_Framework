@@ -370,8 +370,7 @@ void GTR::Renderer::renderReflectionsToBuffer(Camera* camera)
 	shader->enable();
 
 	FBO* gbuffers_fbo = Application::instance->gbuffers_fbo;
-	// DEFERRED UNIFORMS
-	//pass the gbuffers to the shader
+
 	shader->setTexture("u_color_texture", gbuffers_fbo->color_textures[0], 0);
 	shader->setTexture("u_normal_texture", gbuffers_fbo->color_textures[1], 1);
 	shader->setTexture("u_extra_texture", gbuffers_fbo->color_textures[2], 2);
@@ -387,21 +386,39 @@ void GTR::Renderer::renderReflectionsToBuffer(Camera* camera)
 
 	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
 	shader->setUniform("u_camera_position", camera->eye);
-	Vector3 positions[4] = { reflection_probes_list[0]->pos, reflection_probes_list[1]->pos, reflection_probes_list[2]->pos, reflection_probes_list[3]->pos };
-	shader->setUniform3Array("u_probes_positions", (float*)positions, 4);
-	shader->setTexture("u_cubemap_0", reflection_probes_list[0]->cubemap, 4);
-	shader->setTexture("u_cubemap_1", reflection_probes_list[1]->cubemap, 5);
-	shader->setTexture("u_cubemap_2", reflection_probes_list[2]->cubemap, 6);
-	shader->setTexture("u_cubemap_3", reflection_probes_list[3]->cubemap, 7);
+	Vector3 positions[10];
+	
+	for (int i = 0; i < 10; i++)
+	{
+		/*std::string uniform_name = "u_cubemap_" + std::to_string(i);
+		const char* uniform_char = uniform_name.c_str();*/
+		//shader->setTexture(uniform_char, reflection_probes_list[i]->cubemap, 4 + i);
 
+		positions[i] = reflection_probes_list[i]->pos;
+	}
 
-	//shader->setTexture("u_cubemap_texture", closest_probe->cubemap, 4);
+	shader->setUniform3Array("u_probes_positions", (float*)positions, 10);
+	
+	shader->setTexture("u_cubemap_0", reflection_probes_list[0]->cubemap, 4 + 0);
+	shader->setTexture("u_cubemap_1", reflection_probes_list[1]->cubemap, 4 + 1);
+	shader->setTexture("u_cubemap_2", reflection_probes_list[2]->cubemap, 4 + 2);
+	shader->setTexture("u_cubemap_3", reflection_probes_list[3]->cubemap, 4 + 3);
+	shader->setTexture("u_cubemap_4", reflection_probes_list[4]->cubemap, 4 + 4);
+	shader->setTexture("u_cubemap_5", reflection_probes_list[5]->cubemap, 4 + 5);
+	shader->setTexture("u_cubemap_6", reflection_probes_list[6]->cubemap, 4 + 6);
+	shader->setTexture("u_cubemap_7", reflection_probes_list[7]->cubemap, 4 + 7);
+	shader->setTexture("u_cubemap_8", reflection_probes_list[8]->cubemap, 4 + 8);
+	shader->setTexture("u_cubemap_9", reflection_probes_list[9]->cubemap, 4 + 9);
+
+	shader->setUniform("u_normal_distance", Scene::instance->refl_normal_distance);
 
 	quad->render(GL_TRIANGLES);
 	shader->disable();
 
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
 	Application::instance->reflections_component->unbind();
-	//}
 }
 
 void Renderer::showGBuffers()

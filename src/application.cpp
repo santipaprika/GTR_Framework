@@ -87,8 +87,8 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	reflections_fbo = new FBO();
 	reflections_fbo->create(64, 64, 1, GL_RGBA, GL_UNSIGNED_BYTE);
 
-	reflections_component = new Texture();
-	reflections_component->create(window_width, window_height, GL_RGBA, GL_UNSIGNED_BYTE, false);
+	reflections_component = new FBO();
+	reflections_component->create(window_width, window_height, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
 
 	//let's create an FBO to render the AO inside
 	ssao_fbo = new FBO();
@@ -184,6 +184,7 @@ void Application::render(void)
 		glEnable(GL_CULL_FACE);
 		glFrontFace(GL_CCW);
 		
+
 		if (use_gamma_correction)
 			illumination_fbo->color_textures[0]->toViewport(Shader::Get("degammaDeferred"));
 		else
@@ -192,14 +193,10 @@ void Application::render(void)
 		if (scene->use_reflections)
 		{
 			renderer->renderReflectionsToBuffer(camera);
-			//reflections_component->bind();
-			//glClearColor(0.5, 0.0, 0.0,0.5);
-			//glClear(GL_COLOR_BUFFER_BIT);
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 			Texture::UnbindAll();
-			//glViewport(0, 0, window_width, window_height);
-			reflections_component->toViewport();
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+			reflections_component->color_textures[0]->toViewport();
 		}
 
 		if (scene->use_volumetric)

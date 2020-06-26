@@ -2311,11 +2311,13 @@ void main()
 		reflection = textureLod( u_cubemap_3, R, roughness * 5.0 ).xyz;
 	else
 	{
+		//avoid misleading information on points far to proves
 		FragColor = vec4( 0.0 );
 		return;
 	}
 	
-	FragColor = vec4( reflection , metalness );	// metalness as alpha
+	//atenuation factor for reaching the threshold progressively?
+	FragColor = vec4( reflection, metalness * metalness );// * (1 - min_dist / 400);
 	
 }
 

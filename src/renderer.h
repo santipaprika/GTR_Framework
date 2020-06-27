@@ -41,137 +41,106 @@ namespace GTR {
 	{
 	public:
 
-		//FBOs
-		FBO* gbuffers_fbo;
+		// FBOs & Textures
 		FBO* illumination_fbo;
+		FBO* gbuffers_fbo;
+		FBO* ssao_fbo;
+		Texture* ssao_blur;
+		Texture* probes_texture;
 		FBO* irr_fbo;
 		FBO* reflections_fbo;
 		FBO* reflections_component;
 		FBO* volumetrics_fbo;
 
-		//Flags
-		bool show_gbuffers;
+		// FLAGS
+		bool show_gbuffers;					//Deferred general
 		bool use_geometry_on_deferred;
 		bool show_deferred_light_geometry;
 		bool forward_for_blends;
-		//ssao
-		bool use_ssao;
+		
+		bool use_ssao;						//SSAO
 		bool show_ssao;
-		FBO* ssao_fbo;
-		Texture* ssao_blur;
-		std::vector<Vector3> random_points;
 		int kernel_size;
 		float sphere_radius;
 		int number_blur;
 
-		bool reverse_shadowmap;
+		bool reverse_shadowmap;				//Shadows
 		bool AA_shadows;
 		bool rendering_shadowmap;
-		std::vector<GTR::Light*> shadow_caster_lights;
 
-		bool use_gamma_correction;
+		bool use_gamma_correction;			//Color correction
 		bool use_tone_mapping;
-
-		// Irradiance
-		bool use_irradiance;
+		
+		bool use_irradiance;				//Irradiance
 		bool show_probes;
 		bool show_coefficients;
 		bool interpolate_probes;
 		float irr_normal_distance;
 		float refl_normal_distance;
 
-		Vector3 dim_grid;
+		bool use_reflections;				//Reflection
+		bool show_rProbes;
+
+		bool use_volumetric;				//Volumetric
+		
+		// Vectors and aux
+		std::vector<GTR::Light*> shadow_caster_lights;	//vector that stores the lights that uses shadows
+		std::vector<Vector3> random_points;				//vector of random points for the irradiance
+		Vector3 dim_grid;								//Grid parameters for irradiance
 		Vector3 start_pos_grid;
 		Vector3 end_pos_grid;
 		Vector3 delta_grid;
-		Texture* probes_texture;
-		std::string probes_filename;
-
-		bool use_reflections;
-		bool show_rProbes;
-
-		bool use_volumetric;
+		std::string probes_filename;					//Name of the file that stores the probes
 
 
-		// DEFERRED
+		// FLAGS & SELECTORS
+		void initFlags();
+		void setDefaultGLFlags();
+		void manageBlendingAndCulling(GTR::Material* material, bool rendering_light, bool is_first_pass = true);
+		void enableShader(Shader* shader);
+		Shader* chooseShader(GTR::Light* light);
+
+		// RENDER to Buffers
 		void renderGBuffers(Scene* scene, Camera* camera);
-
 		void renderToGBuffers(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
-
+		std::vector<GTR::Light*> renderSceneShadowmaps(GTR::Scene* scene); //to render the scene to texture (shadowmap)
 		void renderSSAO(Camera* camera);
-
 		void renderIlluminationToBuffer(Camera* camera);
-
 		void renderReflectionsToBuffer(Camera* camera);
-
+		
+		// BUFFERS to Viewport
+		void renderToViewport(Camera* camera, Scene* scene);
 		void showGBuffers();
-
+		void showSceneShadowmaps();
 		void showSSAO();
 
-		//Irradiance
-		void computeIrradiance(Scene* scene);
+		// PROBES
+		void renderIrradianceProbe(Vector3 pos, float size, float* coeffs);		//Render
+		void renderReflectionProbe(Vector3 pos, float size, Texture* cubemap);
+		void writeProbesToDisk(Scene* scene);									//Store to disk
+		bool loadProbesFromDisk(Scene* scene);
+		void computeIrradiance(Scene* scene);									//Irradiance
+		void computeIrradianceCoefficients(sProbe &probe, Scene* scene);
 		void computeAllIrradianceCoefficients(Scene* scene);
 		void setIrradianceTexture(Scene* scene);
 		void SetIrradianceUniforms(Shader* shader, Scene* scene);
-		void writeProbesToDisk(Scene* scene);
-		bool loadProbesFromDisk(Scene* scene);
+		void computeReflection(Scene* scene);									//Reflection
 
-		void computeReflection(Scene* scene);
-
-		// MULTIPASS
-
-		//to render the scene to viewport
-		void renderSceneForward(GTR::Scene* scene, Camera* camera);
-
-		//manages blendign
-		void manageBlendingAndCulling(GTR::Material* material, bool rendering_light, bool is_first_pass = true);
-		
-		//to render the scene to texture (shadowmap)
-		std::vector<GTR::Light*> renderSceneShadowmaps(GTR::Scene* scene);
-
+		// MAIN Render Scene
+		void renderScene(GTR::Scene* scene, Camera* camera); //to render a scene
+		void renderPrefab(const Matrix44& model, GTR::Prefab* prefab, Camera* camera); //to render a whole prefab (with all its nodes)
+		void renderNode(const Matrix44& model, GTR::Node* node, Camera* camera); //to render one node from the prefab and its children
+		void renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera); //to render one mesh given its material and transformation matrix
+		// other render types
+		void renderSceneForward(GTR::Scene* scene, Camera* camera); //forward render to viewport
 		void renderPointShadowmap(Light* light);
-
-		//to render a scene
-		void renderScene(GTR::Scene* scene, Camera* camera);
-	
-		//to render a whole prefab (with all its nodes)
-		void renderPrefab(const Matrix44& model, GTR::Prefab* prefab, Camera* camera);
-
-		//to render one node from the prefab and its children
-		void renderNode(const Matrix44& model, GTR::Node* node, Camera* camera);
-
-		//to render one mesh given its material and transformation matrix
-		void renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
-
-		void renderWithoutLights(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
-		
-		void renderMultiPass(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
-		
-		Shader* chooseShader(GTR::Light* light);
-
-		void enableShader(Shader* shader);
-		//render shadowmap
-		void renderSimple(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
-
-		void showSceneShadowmaps();
-
-		void setDefaultGLFlags();
-
-		// PROBES
-		void computeIrradianceCoefficients(sProbe &probe, Scene* scene);
-
-		void renderIrradianceProbe(Vector3 pos, float size, float* coeffs);
-
-		void renderReflectionProbe(Vector3 pos, float size, Texture* cubemap);
-
-		// SKYBOX
+		void renderMultiPass(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera); //render for each light in the scene
+		void renderWithoutLights(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera); //render if no lights
+		void renderSimple(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera); //for the shadowmap
 		void renderSkybox(Camera* camera, Texture* environment);
+		
+		void renderInMenu(Scene* scene); //ImGUI
 
-		void initFlags();
-
-		void renderToViewport(Camera* camera, Scene* scene);
-
-		void renderInMenu(Scene* scene);
 	};
 
 	Texture* CubemapFromHDRE(const char* filename);

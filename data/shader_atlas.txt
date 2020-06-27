@@ -37,6 +37,8 @@ reflectionProbe basic.vs reflectionProbe.fs
 skybox basic.vs skybox.fs
 // Volume scattering
 volumetric quad.vs volumetric.fs
+// Decals
+decal basic.vs decal.fs
  
 // -------------------------------------------------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1110,7 +1112,7 @@ uniform bool u_use_gamma_correction;
 
 layout(location = 0) out vec4 FragColor;
 layout(location = 1) out vec4 NormalColor;
-layout(location = 2) out vec4 EimssiveColor;
+layout(location = 2) out vec4 EmissiveColor;
 
 #include "gammaFunctions"
 
@@ -1128,11 +1130,11 @@ void main()
 	vec4 texture_color = texture( u_texture, uv * u_tiles_number);
 	
 	if (u_use_gamma_correction) {
-		EimssiveColor = vec4(gamma(emissive.xyz), matProperties.x);
+		EmissiveColor = vec4(gamma(emissive.xyz), matProperties.x);
 		color.xyz *= gamma(texture_color.xyz);
 	}
 	else {
-		EimssiveColor = vec4(emissive.xyz, matProperties.x);
+		EmissiveColor = vec4(emissive.xyz, matProperties.x);
 		color.xyz *= texture_color.xyz;
 	}
 	
@@ -2441,4 +2443,69 @@ void main()
 	}
 
 	FragColor = vec4(acc_color, density);
+}
+
+\decal.fs
+
+#version 330
+
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
+
+uniform sampler2D u_texture;
+uniform sampler2D u_texture_material;
+uniform sampler2D u_depth_texture;
+uniform sampler2D u_normal_texture;
+
+uniform float u_roughness_factor;
+uniform float u_metallic_factor;
+
+uniform mat4 u_inverse_viewprojection;
+uniform vec2 u_iRes;
+
+uniform mat4 u_imodel;
+uniform vec3 u_camera_pos;
+
+layout(location = 0) out vec4 FragColor;
+layout(location = 1) out vec4 NormalColor;
+layout(location = 2) out vec4 EmissiveColor;
+
+void main()
+{
+	vec2 uv = (gl_FragCoord.xy) * u_iRes; //extract uvs from pixel screenpos
+	
+	//reconstruct world position from depth and inv. viewproj
+	float depth = texture( u_depth_texture, uv ).x;
+	vec3 normal = texture( u_normal_texture, uv ).xyz;
+	
+	if (depth >= 1)
+		discard;
+	
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+	vec3 V = normalize( worldpos - u_camera_pos );
+	
+	vec3 decal_pos = (u_imodel * vec4(worldpos, 1.0)).xyz;
+	vec2 decal_uv = decal_pos.xz * 0.5 + vec2(0.5);
+	
+	if (decal_uv.x < 0 || decal_uv.x > 1 || decal_uv.y < 0 || decal_uv.y > 1)
+		discard;
+	
+	//vec4 texture_color = texture( u_texture, decal_uv );
+	vec3 texture_color = texture( u_texture, decal_uv ).xyz;
+	vec4 texture_material = texture( u_texture_material, decal_uv );
+	
+	float occlusion = texture_material.x;
+	float roughness = texture_material.y * u_roughness_factor;
+	float metalness = texture_material.z * u_metallic_factor;
+
+	//'blending' will add this to the current buffers
+	FragColor = vec4(texture_color, metalness);
+	NormalColor = vec4(normal, roughness);
+	EmissiveColor = vec4(vec3(0.0), occlusion);
+	//FragColor = vec4(texture_color);
+	//NormalColor = vec4(0.0);
+	//EmissiveColor = vec4(0.0);
 }

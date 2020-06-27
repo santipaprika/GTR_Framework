@@ -50,6 +50,57 @@ void Renderer::renderGBuffers(Scene* scene, Camera* camera)
 
 	//stop rendering to the gbuffers
 	gbuffers_fbo->unbind();
+
+	gbuffers_fbo->depth_texture->copyTo(Application::instance->depth_texture_aux);
+	gbuffers_fbo->color_textures[1]->copyTo(Application::instance->normal_texture_aux);
+
+	if (Application::instance->show_decal)
+	{
+		Mesh* cube = new Mesh();
+		cube->createCube();
+
+		Application* application = Application::instance;
+		gbuffers_fbo->bind();
+
+		glDisable(GL_BLEND);
+		//glBlendFunc(GL_ONE, GL_ONE);
+		glEnable(GL_DEPTH_TEST);
+		glEnable(GL_CULL_FACE);
+
+		Shader* shader = Shader::Get("decal");
+		shader->enable();
+
+		Matrix44 inv_vp = camera->viewprojection_matrix;
+		inv_vp.inverse();
+
+		Matrix44 m;
+
+		m.translate(-55,65 -1000,-30);
+		m.scale(40, 30, 40);
+		m.rotate(-PI / 2.0f, m.frontVector());
+		m.rotate(PI / 2.0f, m.rightVector());
+		Matrix44 im = m;
+		im.inverse();
+
+		shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+		shader->setUniform("u_imodel", im);
+		shader->setUniform("u_inverse_viewprojection", inv_vp);
+		shader->setUniform("u_iRes", Vector2(1.0 / (float)application->gbuffers_fbo->depth_texture->width, 1.0 / (float)application->gbuffers_fbo->depth_texture->height));
+		shader->setUniform("u_camera_pos", camera->eye);
+		shader->setUniform("u_model", m);
+		shader->setTexture("u_depth_texture", application->depth_texture_aux, 0);
+		shader->setTexture("u_normal_texture", application->normal_texture_aux, 1);
+		shader->setTexture("u_texture", Texture::Get("data/textures/decal.png"), 2);
+		shader->setTexture("u_texture_material", Texture::Get("data/textures/decal_material.png"), 3);
+		shader->setUniform("u_metallic_factor", 1.0f);
+		shader->setUniform("u_roughness_factor", 1.0f);
+
+		cube->render(GL_TRIANGLES);
+		
+		gbuffers_fbo->unbind();	
+
+		application->depth_texture_aux->copyTo(gbuffers_fbo->depth_texture);
+	}
 }
 
 void Renderer::renderToGBuffers(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera)
@@ -389,13 +440,7 @@ void GTR::Renderer::renderReflectionsToBuffer(Camera* camera)
 	Vector3 positions[10];
 	
 	for (int i = 0; i < 10; i++)
-	{
-		/*std::string uniform_name = "u_cubemap_" + std::to_string(i);
-		const char* uniform_char = uniform_name.c_str();*/
-		//shader->setTexture(uniform_char, reflection_probes_list[i]->cubemap, 4 + i);
-
 		positions[i] = reflection_probes_list[i]->pos;
-	}
 
 	shader->setUniform3Array("u_probes_positions", (float*)positions, 10);
 	

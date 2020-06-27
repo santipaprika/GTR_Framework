@@ -38,6 +38,8 @@ public:
 	bool use_gamma_correction;
 	bool use_ssao;
 
+	bool show_decal;
+
 	GTR::Light* light_selected;
 	GTR::PrefabEntity* prefab_selected;
 
@@ -65,6 +67,10 @@ public:
 	int kernel_size;
 	float sphere_radius;
 	int number_blur;
+
+	// Decal
+	Texture* depth_texture_aux;
+	Texture* normal_texture_aux;
 
 	//some vars
 	bool mouse_locked; //tells if the mouse is locked (blocked in the center and not visible)

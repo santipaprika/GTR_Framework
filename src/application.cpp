@@ -38,6 +38,8 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	sphere_radius = 3.0f;
 	number_blur = 5;
 
+	show_decal = true;
+
 	fps = 0;
 	frame = 0;
 	time = 0.0f;
@@ -95,8 +97,14 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	ssao_fbo->create(window_width, window_height);
 
 	//maybe we want to create also one for the blur, in this case just create a texture
-	ssao_blur = new Texture();
-	ssao_blur->create(ssao_fbo->width, ssao_fbo->height);
+	ssao_blur = NULL;
+	ssao_blur = new Texture(ssao_fbo->width, ssao_fbo->height);
+
+	depth_texture_aux = NULL;
+	depth_texture_aux = new Texture(gbuffers_fbo->depth_texture->width, gbuffers_fbo->depth_texture->height, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, false);
+
+	normal_texture_aux = NULL;
+	normal_texture_aux = new Texture(gbuffers_fbo->color_textures[1]->width, gbuffers_fbo->color_textures[1]->height, GL_RGBA, GL_UNSIGNED_BYTE, false);
 
 	//This class will be the one in charge of rendering all 
 	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor
@@ -270,6 +278,7 @@ void Application::renderDebugGUI(void)
 	if (kernel_size % 2 == 0) kernel_size++;
 	ImGui::SliderFloat("Radius of the spheres", &sphere_radius, 0.0f, 20.0f);
 	ImGui::SliderInt("Number of blurs", &number_blur, 1, 10);
+	ImGui::Checkbox("Show Decal", &show_decal);
 
 	//add info to the debug panel about the camera
 	if (ImGui::TreeNode(camera, "Camera")) {
@@ -522,15 +531,21 @@ void Application::onResize(int width, int height)
 		GL_UNSIGNED_BYTE,
 		false);	
 
-	/*volumetrics_fbo->~FBO();
+	volumetrics_fbo->~FBO();
 	volumetrics_fbo->create(window_width, window_height,
 		1,
-		GL_RGB,
+		GL_RGBA,
 		GL_UNSIGNED_BYTE,
-		false);*/
+		false);
 
-	/*reflections_component->~Texture();
-	reflections_component->create(window_width, window_height);*/
+	depth_texture_aux->~Texture();
+	depth_texture_aux = new Texture(gbuffers_fbo->depth_texture->width, gbuffers_fbo->depth_texture->height, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, false);
+
+	normal_texture_aux->~Texture();
+	normal_texture_aux = new Texture(gbuffers_fbo->color_textures[1]->width, gbuffers_fbo->color_textures[1]->height, GL_RGBA, GL_UNSIGNED_BYTE, false);
+
+	reflections_component->~FBO();
+	reflections_component->create(window_width, window_height, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
 
 }
 

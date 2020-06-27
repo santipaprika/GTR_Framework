@@ -31,7 +31,7 @@ void Material::setUniforms(Shader* shader, bool is_first_pass) {
 	Texture* white_tex = Texture::getWhiteTexture();
 
 	//if (color) color = Vector4(1.0, 1.0, 1.0, 1.0);
-	if (Application::instance->use_gamma_correction)
+	if (Application::instance->renderer->use_gamma_correction)
 		shader->setUniform("u_color", Vector4(gamma(color.xyz()), color.w));
 	else
 		shader->setUniform("u_color", color);

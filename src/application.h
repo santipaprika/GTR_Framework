@@ -33,11 +33,8 @@ public:
 	bool render_debug;
 	bool render_grid;
 	bool render_gui;
-	
-	bool rendering_shadowmap;
-	bool use_gamma_correction;
-	bool use_ssao;
 
+	//Imgui
 	GTR::Light* light_selected;
 	GTR::PrefabEntity* prefab_selected;
 
@@ -50,21 +47,6 @@ public:
 	enum Illuminations { PHONG, PBR, Illuminations_COUNT };
 	const char* illuminations_names[Illuminations_COUNT] = { "Phong", "PBR" };
 	int current_illumination;
-
-	FBO* gbuffers_fbo;
-	FBO* illumination_fbo;
-	FBO* irr_fbo;
-	FBO* reflections_fbo;
-	FBO* volumetrics_fbo;
-	FBO* reflections_component;
-
-	// SSAO
-	FBO* ssao_fbo;
-	Texture* ssao_blur;
-	std::vector<Vector3> random_points;
-	int kernel_size;
-	float sphere_radius;
-	int number_blur;
 
 	//some vars
 	bool mouse_locked; //tells if the mouse is locked (blocked in the center and not visible)

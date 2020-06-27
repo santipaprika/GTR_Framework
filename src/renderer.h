@@ -25,13 +25,74 @@ namespace GTR {
 		Texture* cubemap = NULL;
 	};
 
+	// strict for writing probes to disk
+	struct sIrrHeader {
+		Vector3 start;
+		Vector3 end;
+		Vector3 delta;
+		Vector3 dims;
+		int num_probes;
+	};
+
 
 	// This class is in charge of rendering anything in our system.
 	// Separating the render from anything else makes the code cleaner
 	class Renderer
 	{
-
 	public:
+
+		//FBOs
+		FBO* gbuffers_fbo;
+		FBO* illumination_fbo;
+		FBO* irr_fbo;
+		FBO* reflections_fbo;
+		FBO* reflections_component;
+		FBO* volumetrics_fbo;
+
+		//Flags
+		bool show_gbuffers;
+		bool use_geometry_on_deferred;
+		bool show_deferred_light_geometry;
+		bool forward_for_blends;
+		//ssao
+		bool use_ssao;
+		bool show_ssao;
+		FBO* ssao_fbo;
+		Texture* ssao_blur;
+		std::vector<Vector3> random_points;
+		int kernel_size;
+		float sphere_radius;
+		int number_blur;
+
+		bool reverse_shadowmap;
+		bool AA_shadows;
+		bool rendering_shadowmap;
+		std::vector<GTR::Light*> shadow_caster_lights;
+
+		bool use_gamma_correction;
+		bool use_tone_mapping;
+
+		// Irradiance
+		bool use_irradiance;
+		bool show_probes;
+		bool show_coefficients;
+		bool interpolate_probes;
+		float irr_normal_distance;
+		float refl_normal_distance;
+
+		Vector3 dim_grid;
+		Vector3 start_pos_grid;
+		Vector3 end_pos_grid;
+		Vector3 delta_grid;
+		Texture* probes_texture;
+		std::string probes_filename;
+
+		bool use_reflections;
+		bool show_rProbes;
+
+		bool use_volumetric;
+
+
 		// DEFERRED
 		void renderGBuffers(Scene* scene, Camera* camera);
 
@@ -46,6 +107,16 @@ namespace GTR {
 		void showGBuffers();
 
 		void showSSAO();
+
+		//Irradiance
+		void computeIrradiance(Scene* scene);
+		void computeAllIrradianceCoefficients(Scene* scene);
+		void setIrradianceTexture(Scene* scene);
+		void SetIrradianceUniforms(Shader* shader, Scene* scene);
+		void writeProbesToDisk(Scene* scene);
+		bool loadProbesFromDisk(Scene* scene);
+
+		void computeReflection(Scene* scene);
 
 		// MULTIPASS
 
@@ -82,7 +153,7 @@ namespace GTR {
 		//render shadowmap
 		void renderSimple(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
 
-		void showSceneShadowmaps(std::vector<Light*> shadow_caster_lights);
+		void showSceneShadowmaps();
 
 		void setDefaultGLFlags();
 
@@ -95,6 +166,12 @@ namespace GTR {
 
 		// SKYBOX
 		void renderSkybox(Camera* camera, Texture* environment);
+
+		void initFlags();
+
+		void renderToViewport(Camera* camera, Scene* scene);
+
+		void renderInMenu(Scene* scene);
 	};
 
 	Texture* CubemapFromHDRE(const char* filename);

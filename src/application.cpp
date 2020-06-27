@@ -93,8 +93,14 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	renderer->ssao_fbo->create(window_width, window_height);
 
 	//maybe we want to create also one for the blur, in this case just create a texture
-	renderer->ssao_blur = new Texture();
-	renderer->ssao_blur->create(renderer->ssao_fbo->width, renderer->ssao_fbo->height);
+	renderer->ssao_blur = NULL;
+	renderer->ssao_blur = new Texture(renderer->ssao_fbo->width, renderer->ssao_fbo->height);
+
+	renderer->depth_texture_aux = NULL;
+	renderer->depth_texture_aux = new Texture(renderer->gbuffers_fbo->depth_texture->width, renderer->gbuffers_fbo->depth_texture->height, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, false);
+
+	renderer->normal_texture_aux = NULL;
+	renderer->normal_texture_aux = new Texture(renderer->gbuffers_fbo->color_textures[1]->width, renderer->gbuffers_fbo->color_textures[1]->height, GL_RGBA, GL_UNSIGNED_BYTE, false);
 
 	//Create Scene
 	GTR::Scene* scene = new GTR::Scene();
@@ -179,6 +185,7 @@ void Application::render(void)
 		glFrontFace(GL_CCW);
 		
 		renderer->renderToViewport(camera, scene);
+
 	}
 	else {
 		renderer->shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
@@ -214,7 +221,7 @@ void Application::renderDebugGUI(void)
 		for (GTR::Light* light : GTR::Scene::instance->lights)
 			light->intensity *= compensation_factor;
 	}
-	
+
 	//add info to the debug panel about the camera
 	if (ImGui::TreeNode(camera, "Camera")) {
 		camera->renderInMenu();
@@ -471,15 +478,21 @@ void Application::onResize(int width, int height)
 		GL_UNSIGNED_BYTE,
 		false);	
 
-	/*volumetrics_fbo->~FBO();
-	volumetrics_fbo->create(window_width, window_height,
+	renderer->volumetrics_fbo->~FBO();
+	renderer->volumetrics_fbo->create(window_width, window_height,
 		1,
-		GL_RGB,
+		GL_RGBA,
 		GL_UNSIGNED_BYTE,
-		false);*/
+		false);
 
-	/*reflections_component->~Texture();
-	reflections_component->create(window_width, window_height);*/
+	renderer->depth_texture_aux->~Texture();
+	renderer->depth_texture_aux = new Texture(renderer->gbuffers_fbo->depth_texture->width, renderer->gbuffers_fbo->depth_texture->height, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, false);
+
+	renderer->normal_texture_aux->~Texture();
+	renderer->normal_texture_aux = new Texture(renderer->gbuffers_fbo->color_textures[1]->width, renderer->gbuffers_fbo->color_textures[1]->height, GL_RGBA, GL_UNSIGNED_BYTE, false);
+
+	renderer->reflections_component->~FBO();
+	renderer->reflections_component->create(window_width, window_height, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
 
 }
 

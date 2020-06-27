@@ -51,6 +51,8 @@ namespace GTR {
 		FBO* reflections_fbo;
 		FBO* reflections_component;
 		FBO* volumetrics_fbo;
+		Texture* depth_texture_aux;
+		Texture* normal_texture_aux;
 
 		// FLAGS
 		bool show_gbuffers;					//Deferred general
@@ -82,9 +84,11 @@ namespace GTR {
 		bool show_rProbes;
 
 		bool use_volumetric;				//Volumetric
-		int u_quality = 64;
-		float u_air_density = 0.002f;
-		float u_clamp = 3.0f;
+		int u_quality;
+		float u_air_density;
+		float u_clamp;
+
+		bool show_decal;					//Decal
 		
 		// Vectors, Aux and Imgui
 		std::vector<GTR::Light*> shadow_caster_lights;	//vector that stores the lights that uses shadows

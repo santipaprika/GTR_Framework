@@ -24,12 +24,13 @@ void GTR::Renderer::initFlags()
 	forward_for_blends = false;
 
 	show_ssao = false;
-	use_tone_mapping = true;
-	use_gamma_correction = false;
 	use_ssao = true;
 	kernel_size = 5;
 	sphere_radius = 3.0f;
 	number_blur = 5;
+
+	use_gamma_correction = false;
+	use_tone_mapping = false;
 
 	reverse_shadowmap = false;
 	AA_shadows = false;
@@ -46,6 +47,9 @@ void GTR::Renderer::initFlags()
 	refl_normal_distance = 50;
 
 	use_volumetric = true;
+	u_quality = 64;
+	u_air_density = 0.002f;
+	u_clamp = 3.0f;
 
 	show_decal = true;
 }
@@ -108,7 +112,7 @@ void Renderer::renderGBuffers(Scene* scene, Camera* camera)
 
 		Matrix44 m;
 
-		m.translate(-55,65 -1000,-30);
+		m.translate(-59,65 -1000,-30);
 		m.scale(40, 30, 40);
 		m.rotate(-PI / 2.0f, m.frontVector());
 		m.rotate(PI / 2.0f, m.rightVector());
@@ -408,17 +412,20 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 		sh->setUniform("u_camera_position", camera->eye);
 		sh->setUniform("u_viewprojection", camera->viewprojection_matrix);
 
-		sh->setUniform("u_quality", 64);
+		sh->setUniform("u_quality", u_quality);
+		sh->setUniform("u_air_density", u_air_density);
+		sh->setUniform("u_clamp", u_clamp);
 		sh->setTexture("u_noise_tex", noise, 2);
 		sh->setUniform("u_random", vec3(random(), random(), random()));
 
 		//pass the inverse projection of the camera to reconstruct world pos.
 		sh->setUniform("u_inverse_viewprojection", inv_vp);
 		sh->setTexture("u_depth_texture", gbuffers_fbo->depth_texture, 1);
-		sh->setUniform("u_iRes", Vector2(1.0 / gbuffers_fbo->width, 1.0 / gbuffers_fbo->height));
+		sh->setUniform("u_iRes", Vector2(1.0 / volumetrics_fbo->width, 1.0 / volumetrics_fbo->height));
 
 		Light* sun = scene_lights[0];
 		sh->setUniform("u_light_color", gamma(sun->color));
+		sh->setUniform("u_light_intensity", sun->intensity/10.0f);
 		sh->setUniform("u_light_type", sun->light_type);
 		sh->setUniform("u_shadow_viewproj", sun->camera->viewprojection_matrix);
 		sh->setTexture("u_shadowmap", sun->shadow_fbo->depth_texture, 8);
@@ -1394,6 +1401,9 @@ void Renderer::renderInMenu(Scene* scene)
 	ImGui::Spacing(); ImGui::Spacing(); ImGui::Spacing();
 	ImGui::Text("Volume Scattering:");
 	ImGui::Checkbox("Use volume scattering", &use_volumetric);
+	ImGui::SliderInt("Quality", &u_quality, 10, 130);
+	ImGui::SliderFloat("Air density", &u_air_density, 0.001f, 0.01f);
+	ImGui::SliderFloat("Distance sensibility", &u_clamp, 1.0f, 20.0f);
 
 	ImGui::Spacing(); ImGui::Spacing(); ImGui::Spacing();
 	ImGui::Text("Decals:");

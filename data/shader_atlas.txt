@@ -2355,6 +2355,8 @@ in vec3 v_world_position;
 
 uniform vec3 u_camera_position;
 uniform int u_quality;
+uniform float u_air_density;
+uniform float u_clamp;
 uniform sampler2D u_noise_tex;
 uniform vec3 u_random;
 
@@ -2366,11 +2368,12 @@ uniform sampler2D u_shadowmap;
 uniform mat4 u_shadow_viewproj;
 uniform float u_shadow_bias;
 uniform int u_light_type;
+uniform float u_light_intensity;
 uniform vec3 u_light_color;
 
 out vec4 FragColor;
 
-float isShadowed(vec3 pos)	// returns if point is shadowed
+float getShadowFactor(vec3 pos)	// returns if point is shadowed
 {
 	//project our 3D position to the shadowmap
 	vec4 proj_pos = u_shadow_viewproj * vec4(pos, 1.0);
@@ -2428,24 +2431,25 @@ void main()
 	float noise = texture2D(u_noise_tex, uv * u_random.xy).x;
 	ray_pos += normalize(dist) * noise;
 	
-	float d = length(step);
+	float d = clamp(length(step), 0.0, u_clamp);
 	vec3 acc_color = vec3(0.0);
-	float density = 0.0;
+	float acc_density = 0.0;
 
 	for (int i = 1; i < 10000; i++)
 	{
-		acc_color += (d * u_light_color * isShadowed(ray_pos));
-		density += (0.01 * isShadowed(ray_pos));
+		acc_color += (u_light_color * u_light_intensity * getShadowFactor(ray_pos));
+		acc_density += (d * u_air_density * u_light_intensity * getShadowFactor(ray_pos));
 
-		if (density >= 1.0)
+		if (acc_density >= 1.0)
 			break;
 		if (i == u_quality)
 			break;
 		ray_pos += step;
 	}
 
-	FragColor = vec4(acc_color, density);
+	FragColor = vec4(acc_color, acc_density);
 }
+
 
 \decal.fs
 

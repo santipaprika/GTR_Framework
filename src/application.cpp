@@ -77,7 +77,7 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 
 	//create 3 textures of 4 components
 	renderer->illumination_fbo->create(window_width, window_height, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
-	renderer->volumetrics_fbo->create(window_width/1, window_height/1, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
+	renderer->volumetrics_fbo->create(window_width/4, window_height/4, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
 
 	renderer->irr_fbo = new FBO();
 	renderer->irr_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT);
@@ -179,7 +179,6 @@ void Application::render(void)
 		glFrontFace(GL_CCW);
 		
 		renderer->renderToViewport(camera, scene);
-
 	}
 	else {
 		renderer->shadow_caster_lights = renderer->renderSceneShadowmaps(scene);

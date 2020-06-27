@@ -82,8 +82,11 @@ namespace GTR {
 		bool show_rProbes;
 
 		bool use_volumetric;				//Volumetric
+		int u_quality = 64;
+		float u_air_density = 0.002f;
+		float u_clamp = 3.0f;
 		
-		// Vectors and aux
+		// Vectors, Aux and Imgui
 		std::vector<GTR::Light*> shadow_caster_lights;	//vector that stores the lights that uses shadows
 		std::vector<Vector3> random_points;				//vector of random points for the irradiance
 		Vector3 dim_grid;								//Grid parameters for irradiance

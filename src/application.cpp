@@ -73,17 +73,18 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 
 	//create and FBO
 	renderer->illumination_fbo = new FBO();
+	renderer->volumetrics_fbo = NULL;
 	renderer->volumetrics_fbo = new FBO();
 
 	//create 3 textures of 4 components
-	renderer->illumination_fbo->create(window_width, window_height, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
+	renderer->illumination_fbo->create(window_width, window_height, 1, GL_RGB, GL_UNSIGNED_BYTE, false);
 	renderer->volumetrics_fbo->create(window_width/4, window_height/4, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
 
 	renderer->irr_fbo = new FBO();
 	renderer->irr_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT);
 
 	renderer->reflections_fbo = new FBO();
-	renderer->reflections_fbo->create(64, 64, 1, GL_RGBA, GL_UNSIGNED_BYTE);
+	renderer->reflections_fbo->create(64, 64, 1, GL_RGB, GL_UNSIGNED_BYTE);
 
 	renderer->reflections_component = new FBO();
 	renderer->reflections_component->create(window_width, window_height, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
@@ -93,13 +94,9 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	renderer->ssao_fbo->create(window_width, window_height);
 
 	//maybe we want to create also one for the blur, in this case just create a texture
-	renderer->ssao_blur = NULL;
 	renderer->ssao_blur = new Texture(renderer->ssao_fbo->width, renderer->ssao_fbo->height);
 
-	renderer->depth_texture_aux = NULL;
 	renderer->depth_texture_aux = new Texture(renderer->gbuffers_fbo->depth_texture->width, renderer->gbuffers_fbo->depth_texture->height, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, false);
-
-	renderer->normal_texture_aux = NULL;
 	renderer->normal_texture_aux = new Texture(renderer->gbuffers_fbo->color_textures[1]->width, renderer->gbuffers_fbo->color_textures[1]->height, GL_RGBA, GL_UNSIGNED_BYTE, false);
 
 	//Create Scene

@@ -89,6 +89,7 @@ namespace GTR {
 		float u_clamp;
 
 		bool show_decal;					//Decal
+		Mesh* decal_cube;
 		
 		// Vectors, Aux and Imgui
 		std::vector<GTR::Light*> shadow_caster_lights;	//vector that stores the lights that uses shadows

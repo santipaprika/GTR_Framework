@@ -52,6 +52,8 @@ void GTR::Renderer::initFlags()
 	u_clamp = 3.0f;
 
 	show_decal = true;
+	decal_cube = new Mesh();
+	decal_cube->createCube();
 }
 
 //DEFERRED
@@ -93,9 +95,6 @@ void Renderer::renderGBuffers(Scene* scene, Camera* camera)
 
 	if (show_decal)
 	{
-		Mesh* cube = new Mesh();
-		cube->createCube();
-
 		Application* application = Application::instance;
 		gbuffers_fbo->bind();
 
@@ -132,7 +131,7 @@ void Renderer::renderGBuffers(Scene* scene, Camera* camera)
 		shader->setUniform("u_metallic_factor", 1.0f);
 		shader->setUniform("u_roughness_factor", 1.0f);
 
-		cube->render(GL_TRIANGLES);
+		decal_cube->render(GL_TRIANGLES);
 		
 		gbuffers_fbo->unbind();	
 
@@ -338,10 +337,11 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 		shader->setUniform("u_inverse_viewprojection", inv_vp_mp);
 		//pass the inverse window resolution, this may be useful
 		shader->setUniform("u_iRes", Vector2(1.0 / (float)Application::instance->window_width, 1.0 / (float)Application::instance->window_height));
+		shader->setUniform("u_camera_pos", camera->eye);
 
 		if (use_geometry_on_deferred && light->light_type != GTR::DIRECTIONAL)
 		{
-			Mesh* light_geometry;
+			Mesh* light_geometry = NULL;
 
 			switch (light->light_type)
 			{
@@ -353,8 +353,6 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 				break;
 			}
 
-			//basic.vs will need the model and the viewproj of the camera
-			shader->setUniform("u_camera_pos", camera->eye);
 			shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
 
 			//we must translate the model to the center of the light
@@ -433,7 +431,7 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 
 		quad->render(GL_TRIANGLES);
 		sh->disable();
-		volumetrics_fbo->unbind();
+		volumetrics_fbo->unbind(); 
 
 		illumination_fbo->bind();
 		glDisable(GL_BLEND);
@@ -498,6 +496,7 @@ void GTR::Renderer::renderReflectionsToBuffer(Camera* camera)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
 	reflections_component->unbind();
+
 }
 
 void Renderer::showGBuffers()
@@ -875,7 +874,6 @@ Shader* Renderer::chooseShader(Light* light)
 			}
 			else
 				shader = Shader::Get("lightAAShadows");
-			enableShader(shader);
 		}
 		else //the shader without AA is so much simple
 		{
@@ -895,9 +893,9 @@ Shader* Renderer::chooseShader(Light* light)
 			}
 			else
 				shader = Shader::Get("lightShadows");
-			enableShader(shader);
 		}
 
+		enableShader(shader);
 		light->setLightUniforms(shader);
 		light->setShadowUniforms(shader);
 	}

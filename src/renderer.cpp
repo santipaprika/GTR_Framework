@@ -52,6 +52,8 @@ void GTR::Renderer::initFlags()
 	u_clamp = 3.0f;
 
 	show_decal = true;
+	decal_cube = new Mesh();
+	decal_cube->createCube();
 }
 
 //DEFERRED
@@ -93,9 +95,6 @@ void Renderer::renderGBuffers(Scene* scene, Camera* camera)
 
 	if (show_decal)
 	{
-		Mesh* cube = new Mesh();
-		cube->createCube();
-
 		Application* application = Application::instance;
 		gbuffers_fbo->bind();
 
@@ -132,7 +131,7 @@ void Renderer::renderGBuffers(Scene* scene, Camera* camera)
 		shader->setUniform("u_metallic_factor", 1.0f);
 		shader->setUniform("u_roughness_factor", 1.0f);
 
-		cube->render(GL_TRIANGLES);
+		decal_cube->render(GL_TRIANGLES);
 		
 		gbuffers_fbo->unbind();	
 
@@ -498,6 +497,7 @@ void GTR::Renderer::renderReflectionsToBuffer(Camera* camera)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
 	reflections_component->unbind();
+
 }
 
 void Renderer::showGBuffers()

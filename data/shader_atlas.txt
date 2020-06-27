@@ -37,6 +37,10 @@ reflectionProbe basic.vs reflectionProbe.fs
 skybox basic.vs skybox.fs
 // Volume scattering
 volumetric quad.vs volumetric.fs
+// Decals
+decal basic.vs decal.fs
+// Tone Mapping
+toneMapper quad.vs toneMapper.fs
  
 // -------------------------------------------------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1110,7 +1114,7 @@ uniform bool u_use_gamma_correction;
 
 layout(location = 0) out vec4 FragColor;
 layout(location = 1) out vec4 NormalColor;
-layout(location = 2) out vec4 EimssiveColor;
+layout(location = 2) out vec4 EmissiveColor;
 
 #include "gammaFunctions"
 
@@ -1128,11 +1132,11 @@ void main()
 	vec4 texture_color = texture( u_texture, uv * u_tiles_number);
 	
 	if (u_use_gamma_correction) {
-		EimssiveColor = vec4(gamma(emissive.xyz), matProperties.x);
+		EmissiveColor = vec4(gamma(emissive.xyz), matProperties.x);
 		color.xyz *= gamma(texture_color.xyz);
 	}
 	else {
-		EimssiveColor = vec4(emissive.xyz, matProperties.x);
+		EmissiveColor = vec4(emissive.xyz, matProperties.x);
 		color.xyz *= texture_color.xyz;
 	}
 	
@@ -2351,6 +2355,8 @@ in vec3 v_world_position;
 
 uniform vec3 u_camera_position;
 uniform int u_quality;
+uniform float u_air_density;
+uniform float u_clamp;
 uniform sampler2D u_noise_tex;
 uniform vec3 u_random;
 
@@ -2362,11 +2368,12 @@ uniform sampler2D u_shadowmap;
 uniform mat4 u_shadow_viewproj;
 uniform float u_shadow_bias;
 uniform int u_light_type;
+uniform float u_light_intensity;
 uniform vec3 u_light_color;
 
 out vec4 FragColor;
 
-float isShadowed(vec3 pos)	// returns if point is shadowed
+float getShadowFactor(vec3 pos)	// returns if point is shadowed
 {
 	//project our 3D position to the shadowmap
 	vec4 proj_pos = u_shadow_viewproj * vec4(pos, 1.0);
@@ -2424,21 +2431,131 @@ void main()
 	float noise = texture2D(u_noise_tex, uv * u_random.xy).x;
 	ray_pos += normalize(dist) * noise;
 	
-	float d = length(step);
+	float d = clamp(length(step), 0.0, u_clamp);
 	vec3 acc_color = vec3(0.0);
-	float density = 0.0;
+	float acc_density = 0.0;
 
 	for (int i = 1; i < 10000; i++)
 	{
-		acc_color += (d * u_light_color * isShadowed(ray_pos));
-		density += (0.01 * isShadowed(ray_pos));
+		acc_color += (u_light_color * u_light_intensity * getShadowFactor(ray_pos));
+		acc_density += (d * u_air_density * u_light_intensity * getShadowFactor(ray_pos));
 
-		if (density >= 1.0)
+		if (acc_density >= 1.0)
 			break;
 		if (i == u_quality)
 			break;
 		ray_pos += step;
 	}
 
-	FragColor = vec4(acc_color, density);
+	FragColor = vec4(acc_color, acc_density);
+}
+
+
+\decal.fs
+
+#version 330
+
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
+
+uniform sampler2D u_texture;
+uniform sampler2D u_texture_material;
+uniform sampler2D u_depth_texture;
+uniform sampler2D u_normal_texture;
+
+uniform float u_roughness_factor;
+uniform float u_metallic_factor;
+
+uniform mat4 u_inverse_viewprojection;
+uniform vec2 u_iRes;
+
+uniform mat4 u_imodel;
+uniform vec3 u_camera_pos;
+
+layout(location = 0) out vec4 FragColor;
+layout(location = 1) out vec4 NormalColor;
+layout(location = 2) out vec4 EmissiveColor;
+
+void main()
+{
+	vec2 uv = (gl_FragCoord.xy) * u_iRes; //extract uvs from pixel screenpos
+	
+	//reconstruct world position from depth and inv. viewproj
+	float depth = texture( u_depth_texture, uv ).x;
+	vec3 normal = texture( u_normal_texture, uv ).xyz;
+	
+	if (depth >= 1)
+		discard;
+	
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+	vec3 V = normalize( worldpos - u_camera_pos );
+	
+	vec3 decal_pos = (u_imodel * vec4(worldpos, 1.0)).xyz;
+	vec2 decal_uv = decal_pos.xz * 0.5 + vec2(0.5);
+	
+	if (decal_uv.x < 0 || decal_uv.x > 1 || decal_uv.y < 0 || decal_uv.y > 1)
+		discard;
+	
+	//vec4 texture_color = texture( u_texture, decal_uv );
+	vec3 texture_color = texture( u_texture, decal_uv ).xyz;
+	vec4 texture_material = texture( u_texture_material, decal_uv );
+	
+	float occlusion = texture_material.x;
+	float roughness = texture_material.y * u_roughness_factor;
+	float metalness = texture_material.z * u_metallic_factor;
+
+	//'blending' will add this to the current buffers
+	FragColor = vec4(texture_color, metalness);
+	NormalColor = vec4(normal, roughness);
+	EmissiveColor = vec4(vec3(0.0), occlusion);
+	//FragColor = vec4(texture_color);
+	//NormalColor = vec4(0.0);
+	//EmissiveColor = vec4(0.0);
+}
+
+
+\toneMapper.fs
+
+#version 330 core
+
+in vec2 v_uv;
+
+uniform sampler2D u_texture;
+uniform float u_average_lum;
+uniform float u_lumwhite2;
+uniform float u_igamma;
+uniform float u_scale;
+
+out vec4 FragColor;
+
+#include "gammaFunctions"
+
+vec3 RGB2xyY (vec3 rgb)
+{
+	const mat3 RGB2XYZ = mat3(0.4124, 0.3576, 0.1805,
+							   0.2126, 0.7152, 0.0722,
+							   0.0193, 0.1192, 0.9505);
+	vec3 XYZ = RGB2XYZ * rgb;
+	float f = (XYZ.x + XYZ.y + XYZ.z);
+
+	return vec3(XYZ.x / f,
+				XYZ.y / f,
+				XYZ.y);
+}
+
+void main() {
+	vec4 color = texture2D(u_texture, v_uv);
+	vec3 rgb = color.xyz;
+
+	float lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+	float L = (u_scale / u_average_lum) * lum;
+	float Ld = (L * (1.0 + L / u_lumwhite2)) / (1.0 + L);
+
+	rgb = (rgb / lum) * Ld;
+	rgb = max(rgb,vec3(0.001));
+	rgb = pow( rgb, vec3( u_igamma ) );
+	FragColor = vec4( rgb, color.a );
 }

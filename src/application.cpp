@@ -30,13 +30,7 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	render_debug = true;
 	render_gui = true;
 	render_grid = false;
-
 	render_wireframe = false;
-	use_gamma_correction = false;
-	use_ssao = true;
-	kernel_size = 5;
-	sphere_radius = 3.0f;
-	number_blur = 5;
 
 	fps = 0;
 	frame = 0;
@@ -62,44 +56,51 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	camera = new Camera();
 	camera->lookAt(Vector3(-150.f, 150.0f, 250.f) + offset, Vector3(0.f, 0.1f, 0.f) + offset, Vector3(0.f, 1.f, 0.f));
 	camera->setPerspective( 45.f, window_width/(float)window_height, 1.0f, 10000.f);
+	
+	//This class will be the one in charge of rendering all 
+	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor
+	renderer->initFlags();
 
 	//initialize GBuffers for deferred (create FBO)
-	gbuffers_fbo = new FBO();
+	renderer->gbuffers_fbo = new FBO();
 
 	//create 3 textures of 4 components
-	gbuffers_fbo->create(window_width, window_height,
+	renderer->gbuffers_fbo->create(window_width, window_height,
 		3, 			//three textures
 		GL_RGBA, 		//four channels
 		GL_UNSIGNED_BYTE, //1 byte
 		true);		//add depth_texture
 
 	//create and FBO
-	illumination_fbo = new FBO();
-	volumetrics_fbo = new FBO();
+	renderer->illumination_fbo = new FBO();
+	renderer->volumetrics_fbo = new FBO();
 
 	//create 3 textures of 4 components
-	illumination_fbo->create(window_width, window_height, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
-	volumetrics_fbo->create(window_width/1, window_height/1, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
+	renderer->illumination_fbo->create(window_width, window_height, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
+	renderer->volumetrics_fbo->create(window_width/4, window_height/4, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
 
-	irr_fbo = new FBO();
-	irr_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT);
+	renderer->irr_fbo = new FBO();
+	renderer->irr_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT);
 
-	reflections_fbo = new FBO();
-	reflections_fbo->create(64, 64, 1, GL_RGBA, GL_UNSIGNED_BYTE);
+	renderer->reflections_fbo = new FBO();
+	renderer->reflections_fbo->create(64, 64, 1, GL_RGBA, GL_UNSIGNED_BYTE);
 
-	reflections_component = new FBO();
-	reflections_component->create(window_width, window_height, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
+	renderer->reflections_component = new FBO();
+	renderer->reflections_component->create(window_width, window_height, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
 
 	//let's create an FBO to render the AO inside
-	ssao_fbo = new FBO();
-	ssao_fbo->create(window_width, window_height);
+	renderer->ssao_fbo = new FBO();
+	renderer->ssao_fbo->create(window_width, window_height);
 
 	//maybe we want to create also one for the blur, in this case just create a texture
-	ssao_blur = new Texture();
-	ssao_blur->create(ssao_fbo->width, ssao_fbo->height);
+	renderer->ssao_blur = NULL;
+	renderer->ssao_blur = new Texture(renderer->ssao_fbo->width, renderer->ssao_fbo->height);
 
-	//This class will be the one in charge of rendering all 
-	renderer = new GTR::Renderer(); //here so we have opengl ready in constructor
+	renderer->depth_texture_aux = NULL;
+	renderer->depth_texture_aux = new Texture(renderer->gbuffers_fbo->depth_texture->width, renderer->gbuffers_fbo->depth_texture->height, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, false);
+
+	renderer->normal_texture_aux = NULL;
+	renderer->normal_texture_aux = new Texture(renderer->gbuffers_fbo->color_textures[1]->width, renderer->gbuffers_fbo->color_textures[1]->height, GL_RGBA, GL_UNSIGNED_BYTE, false);
 
 	//Create Scene
 	GTR::Scene* scene = new GTR::Scene();
@@ -145,9 +146,9 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	scene->AddEntity(spot1);
 	scene->AddEntity(spot2);
 
-	random_points = GTR::generateSpherePoints(100, sphere_radius, true);
+	renderer->random_points = GTR::generateSpherePoints(100, renderer->sphere_radius, true);
 
-	if (current_pipeline == DEFERRED) 
+	if (current_pipeline == DEFERRED) //probes only working on deferred for the moment
 	{
 		scene->defineIrradianceGrid(offset);
 		scene->defineReflectionGrid(offset);
@@ -166,15 +167,15 @@ void Application::render(void)
 	if (current_pipeline == DEFERRED) 
 	{
 		// STORE RENDER INTO BUFFERS
-		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
+		renderer->shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
 		renderer->renderGBuffers(scene, camera);
-		if (use_ssao) renderer->renderSSAO(camera);
+		if (renderer->use_ssao) renderer->renderSSAO(camera);
 		renderer->renderIlluminationToBuffer(camera);
-		scene->forward_for_blends = true;
+		renderer->forward_for_blends = true;
 		renderer->renderSceneForward(scene, camera);
-		scene->forward_for_blends = false;
+		renderer->forward_for_blends = false;
 
-		illumination_fbo->unbind();
+		renderer->illumination_fbo->unbind();
 
 		// SHOW BUFFERS TO VIEWPORT
 		//set default flags
@@ -183,54 +184,13 @@ void Application::render(void)
 		glEnable(GL_CULL_FACE);
 		glFrontFace(GL_CCW);
 		
+		renderer->renderToViewport(camera, scene);
 
-		if (use_gamma_correction)
-			illumination_fbo->color_textures[0]->toViewport(Shader::Get("degammaDeferred"));
-		else
-			illumination_fbo->color_textures[0]->toViewport();
-
-		if (scene->use_reflections)
-		{
-			renderer->renderReflectionsToBuffer(camera);
-			Texture::UnbindAll();
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-			reflections_component->color_textures[0]->toViewport();
-		}
-
-		if (scene->use_volumetric)
-		{
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-			volumetrics_fbo->color_textures[0]->toViewport();
-		}
-
-		if (scene->show_probes)
-			for (auto probe : scene->probes)
-				renderer->renderIrradianceProbe(probe.pos, 5, (float*)&probe.sh);
-
-		if (scene->show_rProbes)
-			for (auto rProbe : scene->reflection_probes)
-				renderer->renderReflectionProbe(rProbe->pos, 5, rProbe->cubemap);
-
-		glDisable(GL_DEPTH_TEST);
-		glDisable(GL_BLEND);
-
-		renderer->showSceneShadowmaps(shadow_caster_lights);
-
-		if (scene->show_gbuffers)
-			renderer->showGBuffers();
-
-		if (scene->show_ssao && use_ssao)
-			renderer->showSSAO();
-
-		if (scene->show_coefficients)
-			scene->probes_texture->toViewport();
 	}
 	else {
-		std::vector<GTR::Light*> shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
+		renderer->shadow_caster_lights = renderer->renderSceneShadowmaps(scene);
 		renderer->renderSceneForward(scene, camera);
-		renderer->showSceneShadowmaps(shadow_caster_lights);
+		renderer->showSceneShadowmaps();
 	}
 	
 	//the swap buffers is done in the main loop after this function
@@ -261,28 +221,24 @@ void Application::renderDebugGUI(void)
 		for (GTR::Light* light : GTR::Scene::instance->lights)
 			light->intensity *= compensation_factor;
 	}
-			
-	ImGui::Checkbox("Gamma Correction", &use_gamma_correction);
-	ImGui::Checkbox("Wireframe", &render_wireframe);
-	ImGui::Separator();
-	ImGui::Checkbox("SSAO", &use_ssao);
-	ImGui::SliderInt("Kernel Size", &kernel_size, 1, 15);
-	if (kernel_size % 2 == 0) kernel_size++;
-	ImGui::SliderFloat("Radius of the spheres", &sphere_radius, 0.0f, 20.0f);
-	ImGui::SliderInt("Number of blurs", &number_blur, 1, 10);
 
 	//add info to the debug panel about the camera
 	if (ImGui::TreeNode(camera, "Camera")) {
 		camera->renderInMenu();
 		ImGui::TreePop();
 	}
+	ImGui::Checkbox("Wireframe", &render_wireframe);
+	ImGui::Separator();
+
+	if (ImGui::CollapsingHeader("Renderer")) {
+		renderer->renderInMenu(scene);
+	}
 
 	ImGui::Separator();
 
 	//add info to the debug panel about the scene
-	if (ImGui::CollapsingHeader("Scene")) {
+	if (ImGui::CollapsingHeader("Scene"))
 		scene->renderInMenu();
-	}
 
 	#endif
 }
@@ -508,29 +464,35 @@ void Application::onResize(int width, int height)
 	window_height = height;
 
 	//Update FBO's
-	gbuffers_fbo->~FBO();
-	gbuffers_fbo->create(window_width, window_height,
+	renderer->gbuffers_fbo->~FBO();
+	renderer->gbuffers_fbo->create(window_width, window_height,
 		3, 	
 		GL_RGBA, 	
 		GL_UNSIGNED_BYTE, 
 		true);
 
-	illumination_fbo->~FBO();
-	illumination_fbo->create(window_width, window_height,
+	renderer->illumination_fbo->~FBO();
+	renderer->illumination_fbo->create(window_width, window_height,
 		1, 	
 		GL_RGB, 	
 		GL_UNSIGNED_BYTE,
 		false);	
 
-	/*volumetrics_fbo->~FBO();
-	volumetrics_fbo->create(window_width, window_height,
+	renderer->volumetrics_fbo->~FBO();
+	renderer->volumetrics_fbo->create(window_width, window_height,
 		1,
-		GL_RGB,
+		GL_RGBA,
 		GL_UNSIGNED_BYTE,
-		false);*/
+		false);
 
-	/*reflections_component->~Texture();
-	reflections_component->create(window_width, window_height);*/
+	renderer->depth_texture_aux->~Texture();
+	renderer->depth_texture_aux = new Texture(renderer->gbuffers_fbo->depth_texture->width, renderer->gbuffers_fbo->depth_texture->height, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, false);
+
+	renderer->normal_texture_aux->~Texture();
+	renderer->normal_texture_aux = new Texture(renderer->gbuffers_fbo->color_textures[1]->width, renderer->gbuffers_fbo->color_textures[1]->height, GL_RGBA, GL_UNSIGNED_BYTE, false);
+
+	renderer->reflections_component->~FBO();
+	renderer->reflections_component->create(window_width, window_height, 1, GL_RGBA, GL_UNSIGNED_BYTE, false);
 
 }
 

@@ -2435,7 +2435,7 @@ vec3 getLight(vec3 world_position, int i_light)
 {
 	if (u_light_type[i_light] == 0) //directional
 	{
-		return u_light_color[i_light] * u_light_intensity[i_light];
+		return u_light_color[i_light] * u_light_intensity[i_light] * 1.3;
 	}
 	else //spot
 	{

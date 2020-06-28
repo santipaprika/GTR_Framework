@@ -1368,8 +1368,15 @@ void Renderer::renderToViewport(Camera* camera, Scene* scene)
 	if (use_volumetric)
 	{
 		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		volumetrics_fbo->color_textures[0]->toViewport();
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); 
+		
+		Shader* blur_shader = Shader::Get("blur");
+		blur_shader->enable();
+		blur_shader->setTexture("u_texture", volumetrics_fbo->color_textures[0], 0);
+		blur_shader->setUniform("u_kernel_size", kernel_size);
+		blur_shader->setUniform("u_offset", Vector2(1.0 / volumetrics_fbo->color_textures[0]->width, 1.0 / volumetrics_fbo->color_textures[0]->height));
+		
+		volumetrics_fbo->color_textures[0]->toViewport(blur_shader);
 	}
 
 	if (show_probes)

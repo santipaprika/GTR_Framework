@@ -143,7 +143,7 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	scene->AddEntity(spot1);
 	scene->AddEntity(spot2);
 
-	renderer->random_points = GTR::generateSpherePoints(100, renderer->sphere_radius, true);
+	renderer->random_points = GTR::generateSpherePoints(renderer->number_points, renderer->sphere_radius, renderer->use_ssao_plus);	//SSAO+ default
 
 	if (current_pipeline == DEFERRED) //probes only working on deferred for the moment
 	{

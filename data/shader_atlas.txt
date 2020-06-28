@@ -2058,6 +2058,8 @@ uniform vec3[100] u_points;
 uniform mat4 u_viewprojection;
 uniform float u_radius;
 
+uniform bool u_use_ssao_plus;
+
 out vec4 FragColor;
 
 mat3 cotangent_frame(vec3 N, vec3 p, vec2 uv)
@@ -2110,11 +2112,17 @@ void main()
     //for every sample around the point
     for( int i = 0; i < samples; ++i )
     {
-		//to create the matrix33 to convert from tangent to world
-		mat3 rotmat = cotangent_frame( normal, worldpos, uv );
+		vec3 rotated_point = vec3(0.0);
+		
+		if (u_use_ssao_plus) {
+			//to create the matrix33 to convert from tangent to world
+			mat3 rotmat = cotangent_frame( normal, worldpos, uv );
 
-		//rotate a point is easy
-		vec3 rotated_point = rotmat * u_points[i];
+			//rotate a point is easy
+			rotated_point = rotmat * u_points[i];
+		}
+		else 
+			rotated_point = u_points[i];
 
         //compute is world position using the random
         vec3 p = worldpos + rotated_point * u_radius;
@@ -2223,10 +2231,27 @@ in vec4 v_color;
 uniform vec3 u_camera_position;
 uniform samplerCube u_cubemap_texture;
 
+uniform vec2 u_iRes;
+uniform sampler2D u_depth_texture;
+uniform mat4 u_viewprojection;
+
 out vec4 FragColor;
 
 void main()
 {
+	// scene depth
+	vec2 uv = (gl_FragCoord.xy + 0.5) * u_iRes.xy; //extract uvs from pixel screenpos
+	float depth = texture( u_depth_texture, uv ).x;
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	
+	// probe depth
+	vec3 p = v_world_position;
+	vec4 proj = u_viewprojection * vec4(p,1.0);
+	proj.z = (proj.z - 0.005) / proj.w;
+	
+	if( screen_pos.z < proj.z )
+		discard;
+	
 	vec3 N = normalize( v_normal );
 	vec3 V = normalize( u_camera_position - v_world_position );
 

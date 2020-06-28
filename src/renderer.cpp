@@ -25,9 +25,11 @@ void GTR::Renderer::initFlags()
 
 	show_ssao = false;
 	use_ssao = true;
+	use_ssao_plus = true;
 	kernel_size = 5;
 	sphere_radius = 3.0f;
 	number_blur = 5;
+	number_points = 100;
 
 	use_gamma_correction = false;
 	use_tone_mapping = false;
@@ -48,7 +50,7 @@ void GTR::Renderer::initFlags()
 
 	use_volumetric = true;
 	u_quality = 64;
-	u_air_density = 0.002f;
+	u_air_density = 0.004f;
 	u_clamp = 3.0f;
 
 	show_decal = true;
@@ -114,6 +116,7 @@ void Renderer::renderGBuffers(Scene* scene, Camera* camera)
 		m.translate(-59,65 -1000,-30);
 		m.scale(40, 30, 40);
 		m.rotate(-PI / 2.0f, m.frontVector());
+		m.rotate(PI, m.topVector());
 		m.rotate(PI / 2.0f, m.rightVector());
 		Matrix44 im = m;
 		im.inverse();
@@ -200,8 +203,6 @@ void Renderer::renderSSAO(Camera* camera)
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	ssao_fbo->enableAllBuffers();
 
-	//get the shader for SSAO (remember to create it using the atlas)
-	
 
 	Matrix44 inv_vp = camera->viewprojection_matrix;
 	inv_vp.inverse();
@@ -219,6 +220,7 @@ void Renderer::renderSSAO(Camera* camera)
 	//send random points so we can fetch around
 	shader->setUniform3Array("u_points", (float*)&random_points[0], random_points.size());
 	shader->setUniform("u_radius", sphere_radius);
+	shader->setUniform("u_use_ssao_plus", use_ssao_plus);
 
 	//render fullscreen quad
 	Mesh* quad = Mesh::getQuad();
@@ -1121,6 +1123,10 @@ void Renderer::renderReflectionProbe(Vector3 pos, float size, Texture* cubemap)
 
 	shader->setTexture("u_cubemap_texture", cubemap, 1);
 
+	shader->setUniform("u_iRes", Vector2(1.0 / (float)gbuffers_fbo->depth_texture->width, 1.0 / (float)gbuffers_fbo->depth_texture->height));
+	shader->setTexture("u_depth_texture", gbuffers_fbo->depth_texture, 2);
+	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+
 	mesh->render(GL_TRIANGLES);
 }
 
@@ -1398,12 +1404,20 @@ void Renderer::renderInMenu(Scene* scene)
 		ImGui::Checkbox("Use Geometry", &use_geometry_on_deferred);
 		if (use_geometry_on_deferred)
 			ImGui::Checkbox("Show Light Geometry", &show_deferred_light_geometry); 
+		
+		bool ssao_changed = false;
 		ImGui::Checkbox("Use SSAO", &use_ssao);
+		if (use_ssao)
+			ssao_changed |= ImGui::Checkbox("Use SSAO+", &use_ssao_plus);
 		ImGui::Checkbox("Show SSAO", &show_ssao);
+		ssao_changed |= ImGui::SliderInt("Number of points generated", &number_points, 1, 300);
 		ImGui::SliderInt("Kernel size", &kernel_size, 1, 15);
 		if (kernel_size % 2 == 0) kernel_size++;
-		ImGui::SliderFloat("Radius of the spheres", &sphere_radius, 0.0f, 20.0f);
+		ssao_changed |= ImGui::SliderFloat("Radius of the spheres", &sphere_radius, 0.0f, 20.0f);
 		ImGui::SliderInt("Number of blurs", &number_blur, 1, 10);
+			
+		if (ssao_changed)	//generate sphere again
+			random_points = GTR::generateSpherePoints(number_points, sphere_radius, use_ssao_plus);
 	}
 
 	ImGui::Spacing(); ImGui::Spacing(); ImGui::Spacing();

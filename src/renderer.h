@@ -61,10 +61,12 @@ namespace GTR {
 		bool forward_for_blends;
 		
 		bool use_ssao;						//SSAO
+		bool use_ssao_plus;
 		bool show_ssao;
 		int kernel_size;
 		float sphere_radius;
 		int number_blur;
+		int number_points;
 
 		bool reverse_shadowmap;				//Shadows
 		bool AA_shadows;

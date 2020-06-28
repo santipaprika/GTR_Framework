@@ -56,6 +56,11 @@ void GTR::Renderer::initFlags()
 	show_decal = true;
 	decal_cube = new Mesh();
 	decal_cube->createCube();
+
+	gamma_factor = 2.2f;
+	lum_white = 1.0f;
+	tonemap_scale = 1.0f;
+	average_lum = 0.9;
 }
 
 //DEFERRED
@@ -1345,10 +1350,10 @@ void Renderer::renderToViewport(Camera* camera, Scene* scene)
 		Shader* shader = Shader::Get("toneMapper");
 		Mesh* quad = Mesh::getQuad();
 		shader->enable();
-		shader->setUniform("u_lumwhite2", 1.0f);
-		shader->setUniform("u_igamma", 1 / 2.2f);
-		shader->setUniform("u_scale", 1.0f);
-		shader->setUniform("u_average_lum", 0.9f);
+		shader->setUniform("u_lumwhite2", lum_white * lum_white);
+		shader->setUniform("u_igamma", 1 / gamma_factor);
+		shader->setUniform("u_scale", tonemap_scale);
+		shader->setUniform("u_average_lum", average_lum);
 		illumination_fbo->color_textures[0]->toViewport(shader);
 	}
 	else if (use_gamma_correction)
@@ -1429,6 +1434,13 @@ void Renderer::renderInMenu(Scene* scene)
 	ImGui::Text("Color Correction:");
 	ImGui::Checkbox("Apply Gamma Correction", &use_gamma_correction);
 	ImGui::Checkbox("Apply Tone Mapping", &use_tone_mapping);
+	if (use_tone_mapping)
+	{
+		ImGui::SliderFloat("Gamma factor", &gamma_factor, 0.1, 5);
+		ImGui::SliderFloat("Intensity representing white", &lum_white, 0.1, 5);
+		ImGui::SliderFloat("Tonemap scale", &tonemap_scale, 0.1, 5);
+		ImGui::SliderFloat("Average luminance", &average_lum, 0.1, 5);
+	}
 
 	ImGui::Spacing(); ImGui::Spacing(); ImGui::Spacing();
 	ImGui::Text("Irradiance:");

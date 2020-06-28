@@ -1336,19 +1336,6 @@ void Renderer::renderToViewport(Camera* camera, Scene* scene)
 {
 	if (use_tone_mapping)
 	{
-		// Average Luminance
-		Texture* final_tex = illumination_fbo->color_textures[0];
-		Vector3 acc_lum = Vector3(0, 0, 0);
-		Image final_img;
-		final_img.fromTexture(final_tex);
-		for (int i = 0; i < final_img.width; i++)
-			for (int j = 0; j < final_img.height; j++)
-			{
-				Color pixel_lum = final_img.getPixel(i, j);
-				acc_lum += Vector3(pixel_lum.r / 255, pixel_lum.g / 255, pixel_lum.b / 255);
-			}
-		float av_lum = dot(acc_lum, Vector3(0.2126, 0.7152, 0.0722));
-
 		Shader* shader = Shader::Get("toneMapper");
 		Mesh* quad = Mesh::getQuad();
 		shader->enable();

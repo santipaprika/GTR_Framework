@@ -1180,6 +1180,7 @@ uniform int u_num_probes;
 uniform sampler2D u_probes_texture;
 
 uniform bool u_use_irradiance;
+uniform float u_irradiance_weight;
 uniform bool u_interpolate_probes;
 
 layout(location = 0) out vec4 FragColor;
@@ -1323,7 +1324,7 @@ void main()
 	
 	//irradiance
 	if (u_use_irradiance)
-		color += getIrradiance(worldpos, N) * 0.2;
+		color += getIrradiance(worldpos, N) * u_irradiance_weight;
 
 	//emissive
 	color.xyz += texture2D(u_emissive_texture, uv).xyz;

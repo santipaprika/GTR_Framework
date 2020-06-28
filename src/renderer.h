@@ -76,6 +76,7 @@ namespace GTR {
 		bool use_tone_mapping;
 		
 		bool use_irradiance;				//Irradiance
+		float irradiance_weight;
 		bool show_probes;
 		bool show_coefficients;
 		bool interpolate_probes;

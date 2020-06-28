@@ -38,6 +38,7 @@ void GTR::Renderer::initFlags()
 	AA_shadows = false;
 
 	show_probes = false;
+	irradiance_weight = 0.3;
 	use_irradiance = true;
 	show_coefficients = false;
 	interpolate_probes = true;
@@ -1244,6 +1245,7 @@ void Renderer::SetIrradianceUniforms(Shader* shader, Scene* scene)
 	shader->setUniform("u_use_irradiance", use_irradiance);
 	shader->setUniform("u_interpolate_probes", interpolate_probes);
 	shader->setTexture("u_probes_texture", probes_texture, 9);
+	shader->setUniform("u_irradiance_weight", irradiance_weight);
 }
 
 void Renderer::writeProbesToDisk(Scene* scene)
@@ -1452,6 +1454,7 @@ void Renderer::renderInMenu(Scene* scene)
 	ImGui::Spacing(); ImGui::Spacing(); ImGui::Spacing();
 	ImGui::Text("Irradiance:");
 	ImGui::Checkbox("Use irradiance", &use_irradiance);
+	ImGui::SliderFloat("Irradiance Weight", &irradiance_weight, 0.0f, 2.0);
 	ImGui::Checkbox("Show irrandiance probes", &show_probes);
 	ImGui::Checkbox("Show coefficients", &show_coefficients);
 	ImGui::Checkbox("Interpolate probes", &interpolate_probes);

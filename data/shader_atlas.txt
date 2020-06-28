@@ -1960,7 +1960,7 @@ float getShadowFactor(vec3 world_position, vec3 normal)	// returns if point is s
 		L = -normalize(u_light_direction);
 		light_outside = 1.0;
 	}
-	else if (u_light_type == 2){//spot
+	else if (u_light_type == 2) { //spot
 		L =  normalize(u_light_position - world_position);
 		light_outside = 0.0;
 	}
@@ -2364,19 +2364,72 @@ uniform mat4 u_inverse_viewprojection;
 uniform sampler2D u_depth_texture;
 uniform vec2 u_iRes;
 
-uniform sampler2D u_shadowmap;
-uniform mat4 u_shadow_viewproj;
-uniform float u_shadow_bias;
-uniform int u_light_type;
-uniform float u_light_intensity;
-uniform vec3 u_light_color;
+#define NUM_LIGHTS 3
+
+uniform vec3 u_light_position[NUM_LIGHTS];
+uniform vec3 u_light_color[NUM_LIGHTS];
+uniform float u_light_maxdist[NUM_LIGHTS];
+uniform float u_light_intensity[NUM_LIGHTS];
+uniform int u_light_type[NUM_LIGHTS];
+uniform float u_light_spotCosineCutoff[NUM_LIGHTS];
+uniform float u_light_spotExponent[NUM_LIGHTS];
+uniform vec3 u_light_direction[NUM_LIGHTS];
+uniform float u_shadow_bias[NUM_LIGHTS];
+uniform mat4 u_shadow_viewproj[NUM_LIGHTS];
+uniform sampler2D u_shadowmap1;
+uniform sampler2D u_shadowmap2;
+uniform sampler2D u_shadowmap3;
 
 out vec4 FragColor;
 
-float getShadowFactor(vec3 pos)	// returns if point is shadowed
+float getAttenuation(vec3 world_position, int i_light)
+{	
+	if (u_light_type[i_light] == 0) //directionals dont have att
+		return 1.0; 
+
+	//compute distance
+	float light_distance = length(u_light_position[i_light] - world_position);
+
+	//compute a linear attenuation factor
+	float att_factor = u_light_maxdist[i_light] - light_distance;
+
+	//normalize factor
+	att_factor /= u_light_maxdist[i_light];
+
+	//ignore negative values
+	att_factor = max( att_factor, 0.0 );
+	
+	//quadratic att factor
+	att_factor *= att_factor;
+
+	//apply to amount of light
+	return att_factor;
+}
+
+vec3 getLight(vec3 world_position, int i_light)
+{
+	if (u_light_type[i_light] == 0) //directional
+	{
+		return u_light_color[i_light] * u_light_intensity[i_light];
+	}
+	else //spot
+	{
+		//light vector
+		vec3 L = normalize(u_light_position[i_light] - world_position);
+		vec3 D = normalize(u_light_direction[i_light]);
+		float spotCosine = dot(D, -L);
+		if (spotCosine >= u_light_spotCosineCutoff[i_light])
+			return u_light_color[i_light] * pow(spotCosine, u_light_spotExponent[i_light]) * u_light_intensity[i_light];
+		else 
+			return vec3(0.0); //out of the focus
+	}
+}
+
+
+float getShadowFactor(vec3 pos, int i_light)	// returns if point is shadowed
 {
 	//project our 3D position to the shadowmap
-	vec4 proj_pos = u_shadow_viewproj * vec4(pos, 1.0);
+	vec4 proj_pos = u_shadow_viewproj[i_light] * vec4(pos, 1.0);
 
 	//from homogeneus space to clip space
 	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
@@ -2384,29 +2437,32 @@ float getShadowFactor(vec3 pos)	// returns if point is shadowed
 	//from clip space to uv space
 	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
 	
-	float dark_outside; //add or not light outside the shadow map zone
-	if(u_light_type == 0) {	//directional light
-		dark_outside = 1.0;
+	float shadow_fac; //add or not light outside the shadow map zone
+	if(u_light_type[i_light] == 0) {	//directional light
+		shadow_fac = 1.0;
 	}
-	else if (u_light_type == 2) { //spot
-		dark_outside = 0.0;
+	else if (u_light_type[i_light] == 2) { //spot
+		shadow_fac = 0.0;
 	}
 	
 	//get point depth (from -1 to 1)
-	float real_depth = (proj_pos.z - u_shadow_bias) / proj_pos.w;
+	float real_depth = (proj_pos.z - u_shadow_bias[i_light]) / proj_pos.w;
 
 	//normalize from [-1..+1] to [0..+1]
 	real_depth = real_depth * 0.5 + 0.5;
 	
 	//it is before near or behind far plane
 	if(real_depth < 0.0 || real_depth > 1.0)
-		return dark_outside;	
+		return shadow_fac;	
 	//it is outside on the sides
 	if(shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0)
-		return dark_outside;
+		return shadow_fac;
 	
 	//read depth from depth buffer in [0..+1]
-	float shadow_depth = texture2D(u_shadowmap, shadow_uv).x;
+	float shadow_depth;
+	if (i_light == 0) shadow_depth = texture2D(u_shadowmap1, shadow_uv).x;
+	else if (i_light == 1) shadow_depth = texture2D(u_shadowmap2, shadow_uv).x;
+	else if (i_light == 2) shadow_depth = texture2D(u_shadowmap3, shadow_uv).x;
 	
 	if( shadow_depth < real_depth )
 		return 0.0;
@@ -2434,11 +2490,22 @@ void main()
 	float d = clamp(length(step), 0.0, u_clamp);
 	vec3 acc_color = vec3(0.0);
 	float acc_density = 0.0;
+	float sample_attenuation = d * u_air_density;
 
 	for (int i = 1; i < 10000; i++)
 	{
-		acc_color += (u_light_color * u_light_intensity * getShadowFactor(ray_pos));
-		acc_density += (d * u_air_density * u_light_intensity * getShadowFactor(ray_pos));
+		//for every light
+		for(int j = 0; j < NUM_LIGHTS; ++j)
+		{
+			float shadow_factor = getShadowFactor(ray_pos, j);
+			if (shadow_factor != 0.0)
+			{
+				float att_factor = getAttenuation(ray_pos, j);
+				vec3 light = getLight(ray_pos, j);
+				acc_color += (sample_attenuation * light * shadow_factor * att_factor);
+				acc_density += (sample_attenuation * (length(light) * u_light_intensity[j]) * shadow_factor * att_factor);
+			}
+		}
 
 		if (acc_density >= 1.0)
 			break;

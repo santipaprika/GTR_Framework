@@ -18,6 +18,8 @@ using namespace GTR;
 void GTR::Renderer::initFlags()
 {
 	//flags
+	show_light_meshes = true;
+
 	show_gbuffers = false;
 	use_geometry_on_deferred = true;
 	show_deferred_light_geometry = false;
@@ -732,11 +734,12 @@ void Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 
 	if (rendering_shadowmap) return;
 
-	for (auto light : scene->lights)
-	{
-		//if (light->visible && light->light_type != DIRECTIONAL)
-			//renderSimple(light->light_node->model, light->light_node->mesh, light->light_node->material, camera);
-	}
+	if (show_light_meshes)
+		for (auto light : scene->lights)
+		{
+			if (light->visible && light->light_type != DIRECTIONAL)
+				renderSimple(light->light_node->model, light->light_node->mesh, light->light_node->material, camera);
+		}
 }
 
 //renders all the prefab
@@ -1336,19 +1339,6 @@ void Renderer::renderToViewport(Camera* camera, Scene* scene)
 {
 	if (use_tone_mapping)
 	{
-		// Average Luminance
-		Texture* final_tex = illumination_fbo->color_textures[0];
-		Vector3 acc_lum = Vector3(0, 0, 0);
-		Image final_img;
-		final_img.fromTexture(final_tex);
-		for (int i = 0; i < final_img.width; i++)
-			for (int j = 0; j < final_img.height; j++)
-			{
-				Color pixel_lum = final_img.getPixel(i, j);
-				acc_lum += Vector3(pixel_lum.r / 255, pixel_lum.g / 255, pixel_lum.b / 255);
-			}
-		float av_lum = dot(acc_lum, Vector3(0.2126, 0.7152, 0.0722));
-
 		Shader* shader = Shader::Get("toneMapper");
 		Mesh* quad = Mesh::getQuad();
 		shader->enable();
@@ -1413,6 +1403,9 @@ void Renderer::renderInMenu(Scene* scene)
 {
 	if (Application::instance->current_pipeline == Application::DEFERRED)
 	{
+		ImGui::Checkbox("Show Light Meshes", &show_light_meshes);
+		
+		ImGui::Spacing(); ImGui::Spacing(); ImGui::Spacing();
 		ImGui::Text("Deferred:");
 		ImGui::Checkbox("Show GBuffers", &show_gbuffers);
 		ImGui::Checkbox("Use Geometry", &use_geometry_on_deferred);
@@ -1459,7 +1452,11 @@ void Renderer::renderInMenu(Scene* scene)
 	ImGui::Checkbox("Show coefficients", &show_coefficients);
 	ImGui::Checkbox("Interpolate probes", &interpolate_probes);
 	if (ImGui::Button("Re-compute irradiance"))
+	{
+		show_light_meshes = false;
 		computeIrradiance(scene);
+		show_light_meshes = true;
+	}
 	ImGui::DragFloat("Irr normal distance", &irr_normal_distance, .1f);
 
 	ImGui::Spacing(); ImGui::Spacing(); ImGui::Spacing();

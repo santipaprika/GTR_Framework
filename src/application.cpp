@@ -147,8 +147,10 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 
 	if (current_pipeline == DEFERRED) //probes only working on deferred for the moment
 	{
+		renderer->show_light_meshes = false;
 		scene->defineIrradianceGrid(offset);
 		scene->defineReflectionGrid(offset);
+		renderer->show_light_meshes = true;
 	}
 
 	//hide the cursor
@@ -366,7 +368,7 @@ void Application::renderDebugGizmo()
 	
 	if (light_selected != NULL && light_selected->light_type != GTR::DIRECTIONAL) {
 		light_selected->light_node->model = light_selected->model;
-		light_selected->light_node->model.scale(3,3,3);
+		light_selected->light_node->model.scale(0.5, 0.5, 0.5);
 
 		// if want the light to be static (i.e. shadows won't be computed at every frame), don't update the light information. Otherwise, shadowmap will react to current model.
 		if (light_selected->update_shadowmap)

@@ -124,7 +124,7 @@ void Light::setVisiblePrefab()
 
 	light_node->material = new GTR::Material();
 	light_node->model = model;
-	light_node->model.scale(3, 3, 3);
+	light_node->model.scale(0.5, 0.5, 0.5);
 	light_node->material->color = Vector4(color * (intensity/2),1.0);
 }
 

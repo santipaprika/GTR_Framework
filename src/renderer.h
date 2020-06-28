@@ -41,6 +41,8 @@ namespace GTR {
 	{
 	public:
 
+		bool show_light_meshes;				//Light information
+
 		// FBOs & Textures
 		FBO* illumination_fbo;
 		FBO* gbuffers_fbo;

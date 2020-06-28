@@ -92,6 +92,11 @@ namespace GTR {
 
 		bool show_decal;					//Decal
 		Mesh* decal_cube;
+
+		float gamma_factor;					//Tonemap
+		float lum_white;
+		float tonemap_scale;
+		float average_lum;
 		
 		// Vectors, Aux and Imgui
 		std::vector<GTR::Light*> shadow_caster_lights;	//vector that stores the lights that uses shadows

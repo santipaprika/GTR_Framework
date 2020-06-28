@@ -423,13 +423,49 @@ void Renderer::renderIlluminationToBuffer(Camera* camera)
 		sh->setTexture("u_depth_texture", gbuffers_fbo->depth_texture, 1);
 		sh->setUniform("u_iRes", Vector2(1.0 / volumetrics_fbo->width, 1.0 / volumetrics_fbo->height));
 
-		Light* sun = scene_lights[0];
-		sh->setUniform("u_light_color", gamma(sun->color));
-		sh->setUniform("u_light_intensity", sun->intensity/10.0f);
-		sh->setUniform("u_light_type", sun->light_type);
-		sh->setUniform("u_shadow_viewproj", sun->camera->viewprojection_matrix);
-		sh->setTexture("u_shadowmap", sun->shadow_fbo->depth_texture, 8);
-		sh->setUniform("u_shadow_bias", (float)sun->shadow_bias);
+		//init arrays
+		const int num_lights = 3;			//modify here (and the #define of the shader)
+		Vector3 light_pos[num_lights];
+		Vector3 light_color[num_lights];
+		float max_dist[num_lights];
+		float light_intensity[num_lights];
+		int light_type[num_lights];
+		float spot_cutoff[num_lights];
+		float spot_exp[num_lights];
+		Vector3 light_dir[num_lights];
+		Matrix44 vpm_light_cam[num_lights];
+		float shadow_bias[num_lights];
+
+		//fill arrays
+		std::vector<Light*> lights = Scene::instance->lights;
+		for (int i = 0; i < num_lights; i++)
+		{
+			light_pos[i] = lights[i]->model.getTranslation();
+			light_color[i] = gamma(lights[i]->color);
+			max_dist[i] = lights[i]->max_distance;
+			light_intensity[i] = lights[i]->intensity / 10.0f;
+			light_type[i] = lights[i]->light_type;
+			spot_cutoff[i] = cosf(lights[i]->spot_cutoff_in_deg * DEG2RAD);
+			spot_exp[i] = lights[i]->spot_exponent;
+			light_dir[i] = lights[i]->model.frontVector();
+			shadow_bias[i] = lights[i]->shadow_bias;
+			vpm_light_cam[i] = lights[i]->camera->viewprojection_matrix;
+		}
+
+		//send to shader
+		sh->setUniform3Array("u_light_position", (float*)light_pos, num_lights);
+		sh->setUniform3Array("u_light_color", (float*)light_color, num_lights);
+		sh->setUniform1Array("u_light_maxdist", (float*)max_dist, num_lights);
+		sh->setUniform1Array("u_light_intensity", (float*)light_intensity, num_lights);
+		sh->setUniform1Array("u_light_type", (int*)light_type, num_lights);
+		sh->setUniform1Array("u_light_spotCosineCutoff", (float*)spot_cutoff, num_lights);
+		sh->setUniform1Array("u_light_spotExponent", (float*)spot_exp, num_lights);
+		sh->setUniform3Array("u_light_direction", (float*)light_dir, num_lights);
+		sh->setUniform1Array("u_shadow_bias", (float*)shadow_bias, num_lights);
+		sh->setMatrix44Array("u_shadow_viewproj", vpm_light_cam, num_lights);
+		sh->setTexture("u_shadowmap1", lights[0]->shadow_fbo->depth_texture, 4);
+		sh->setTexture("u_shadowmap2", lights[1]->shadow_fbo->depth_texture, 5);
+		sh->setTexture("u_shadowmap3", lights[2]->shadow_fbo->depth_texture, 6);
 
 		quad->render(GL_TRIANGLES);
 		sh->disable();
